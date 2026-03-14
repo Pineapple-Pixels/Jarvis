@@ -1,0 +1,1 @@
+INSERT INTO memories (content, tags, embedding) VALUES ($1, $2, $3) RETURNING id

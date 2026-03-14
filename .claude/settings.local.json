@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for dir:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Users/Educabot/Desktop/Personal/asistente/pkg/**)",
+      "Bash(done)",
+      "Bash(go vet:*)",
+      "Bash(go test:*)",
+      "Bash(grep -h \"^func Test\" /c/Users/Educabot/Desktop/Personal/asistente/pkg/domain/*_test.go | sort)",
+      "Bash(grep -h \"^func Test\" /c/Users/Educabot/Desktop/Personal/asistente/pkg/controller/*_test.go | sort)",
+      "Bash(grep -h \"^func Test\" /c/Users/Educabot/Desktop/Personal/asistente/pkg/usecase/*_test.go | sort)",
+      "Bash(grep -h \"^func Test\" /c/Users/Educabot/Desktop/Personal/asistente/pkg/service/*_test.go | sort)",
+      "Bash(grep -h \"^func Test\" /c/Users/Educabot/Desktop/Personal/asistente/clients/*_test.go | sort)",
+      "Bash(grep -h \"^func Test\" /c/Users/Educabot/Desktop/Personal/asistente/internal/*/*.go | sort)",
+      "Bash(/tmp/coverage_summary.txt:*)",
+      "Read(//tmp/**)",
+      "Bash(find /c/Users/Educabot/Desktop/Personal/asistente -name \"*test*.go\" -o -name \"*_test.go\" | xargs grep -l -i \"clickup\" 2>/dev/null)",
+      "Bash(find /c/Users/Educabot/Desktop/Personal/asistente/pkg/usecase -type f -name \"*.go\" | xargs grep -l -i \"clickup\" 2>/dev/null || echo \"No clickup usecase files found\")",
+      "Bash(go build:*)"
+    ]
+  }
+}

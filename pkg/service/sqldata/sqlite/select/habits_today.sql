@@ -1,0 +1,1 @@
+SELECT DISTINCT name FROM habits WHERE DATE(logged_at) = DATE('now')

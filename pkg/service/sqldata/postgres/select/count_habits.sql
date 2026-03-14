@@ -1,0 +1,1 @@
+SELECT COUNT(*) FROM habits WHERE name = $1

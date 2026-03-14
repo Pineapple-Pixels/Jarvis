@@ -1,0 +1,1 @@
+SELECT id, date, description, category, amount, amount_usd, paid_by FROM expenses WHERE date >= $1 AND date <= $2 ORDER BY date DESC

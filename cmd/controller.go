@@ -1,0 +1,82 @@
+package main
+
+import (
+	"asistente/config"
+	"asistente/internal/hooks"
+	"asistente/internal/skills"
+	"asistente/pkg/controller"
+	"asistente/pkg/service"
+	"asistente/pkg/usecase"
+)
+
+type Controllers struct {
+	Finance  *controller.FinanceController
+	Memory   *controller.MemoryController
+	Chat     *controller.ConversationController
+	Notion   *controller.NotionController
+	Obsidian *controller.ObsidianController
+	Calendar *controller.CalendarController
+	GitHub   *controller.GitHubController
+	Jira     *controller.JiraController
+	Spotify  *controller.SpotifyController
+	Todoist  *controller.TodoistController
+	Gmail    *controller.GmailController
+	ClickUp  *controller.ClickUpController
+	Habit    *controller.HabitController
+	Link     *controller.LinkController
+	Project  *controller.ProjectController
+}
+
+func NewControllers(
+	cl Clients,
+	cfg config.Config,
+	memorySvc service.MemoryService,
+	financeSvc service.FinanceService,
+	embedder service.Embedder,
+	skillsLoader skills.SkillProvider,
+	hooksRegistry *hooks.Registry,
+) Controllers {
+	financeUC := usecase.NewFinanceUseCase(cl.AI, financeSvc)
+	financeUC.SetMemoryService(memorySvc)
+
+	chatUC := usecase.NewConversationUseCase(memorySvc, cl.AI, hooksRegistry, cfg.MaxHistoryMsgs, cfg.CompactThreshold)
+
+	c := Controllers{
+		Finance: controller.NewFinanceController(financeUC),
+		Memory:  controller.NewMemoryController(memorySvc, embedder),
+		Chat:    controller.NewConversationController(chatUC, cl.AI, skillsLoader, hooksRegistry),
+		Habit:   controller.NewHabitController(usecase.NewHabitUseCase(memorySvc)),
+		Link:    controller.NewLinkController(usecase.NewLinkUseCase(memorySvc, embedder)),
+		Project: controller.NewProjectController(usecase.NewProjectUseCase(memorySvc, embedder, cl.AI)),
+	}
+
+	if cl.Notion != nil {
+		c.Notion = controller.NewNotionController(cl.Notion, cfg.NotionPageID)
+	}
+	if cl.Obsidian != nil {
+		c.Obsidian = controller.NewObsidianController(cl.Obsidian)
+	}
+	if cl.Calendar != nil {
+		c.Calendar = controller.NewCalendarController(cl.Calendar)
+	}
+	if cl.GitHub != nil {
+		c.GitHub = controller.NewGitHubController(cl.GitHub)
+	}
+	if cl.Jira != nil {
+		c.Jira = controller.NewJiraController(cl.Jira)
+	}
+	if cl.Spotify != nil {
+		c.Spotify = controller.NewSpotifyController(cl.Spotify)
+	}
+	if cl.Todoist != nil {
+		c.Todoist = controller.NewTodoistController(cl.Todoist)
+	}
+	if cl.Gmail != nil {
+		c.Gmail = controller.NewGmailController(cl.Gmail)
+	}
+	if cl.ClickUp != nil {
+		c.ClickUp = controller.NewClickUpController(cl.ClickUp)
+	}
+
+	return c
+}

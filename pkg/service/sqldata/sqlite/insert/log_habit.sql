@@ -1,0 +1,1 @@
+INSERT INTO habits (name) VALUES (?)

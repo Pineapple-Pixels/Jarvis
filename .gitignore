@@ -1,0 +1,20 @@
+# IDE
+.idea/
+*.iml
+out
+gen
+
+# Secrets
+.env
+credentials.json
+
+# Data
+data/
+*.db
+
+# Build
+*.exe
+asistente
+
+# Deploy
+certs/
