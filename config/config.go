@@ -42,6 +42,7 @@ type Config struct {
 	GmailUserEmail     string
 	ClickUpAPIToken    string
 	ClickUpTeamID      string
+	FigmaAccessToken   string
 }
 
 func Load() Config {
@@ -82,6 +83,7 @@ func Load() Config {
 		GmailUserEmail:     os.Getenv("GMAIL_USER_EMAIL"),
 		ClickUpAPIToken:    os.Getenv("CLICKUP_API_TOKEN"),
 		ClickUpTeamID:      os.Getenv("CLICKUP_TEAM_ID"),
+		FigmaAccessToken:   os.Getenv("FIGMA_ACCESS_TOKEN"),
 	}
 }
 

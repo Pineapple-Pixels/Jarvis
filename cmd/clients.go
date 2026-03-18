@@ -22,6 +22,7 @@ type Clients struct {
 	Todoist  *clients.TodoistClient
 	Gmail    *clients.GmailClient
 	ClickUp  *clients.ClickUpClient
+	Figma    *clients.FigmaClient
 }
 
 func NewClients(cfg config.Config) Clients {
@@ -40,6 +41,7 @@ func NewClients(cfg config.Config) Clients {
 		Todoist:  newTodoistClient(cfg),
 		Gmail:    newGmailClient(cfg),
 		ClickUp:  newClickUpClient(cfg),
+		Figma:    newFigmaClient(cfg),
 	}
 }
 
@@ -170,4 +172,12 @@ func newClickUpClient(cfg config.Config) *clients.ClickUpClient {
 	}
 	log.Println("ClickUp client configured")
 	return clients.NewClickUpClient(cfg.ClickUpAPIToken, cfg.ClickUpTeamID)
+}
+
+func newFigmaClient(cfg config.Config) *clients.FigmaClient {
+	if cfg.FigmaAccessToken == "" {
+		return nil
+	}
+	log.Println("Figma client configured")
+	return clients.NewFigmaClient(cfg.FigmaAccessToken)
 }

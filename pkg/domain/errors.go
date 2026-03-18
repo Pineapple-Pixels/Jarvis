@@ -95,6 +95,9 @@ var (
 
 	ErrClickUpRequest = errors.New("clickup api request failed")
 	ErrClickUpParse   = errors.New("failed to parse clickup response")
+
+	ErrFigmaRequest = errors.New("figma api request failed")
+	ErrFigmaParse   = errors.New("failed to parse figma response")
 )
 
 // Sentinel errors for cron.

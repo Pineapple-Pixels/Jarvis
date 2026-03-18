@@ -152,6 +152,12 @@ HTTP Request → Controller → UseCase → Service (DB/API) → UseCase → Con
 | POST | `/api/links` | Save link |
 | GET | `/api/links/search` | Search links |
 | GET | `/api/projects/:name/status` | Project status summary |
+| GET | `/api/figma/file/:file_key` | Get Figma file metadata |
+| GET | `/api/figma/file/:file_key/nodes?ids=` | Get specific nodes |
+| GET | `/api/figma/file/:file_key/images?ids=&format=&scale=` | Render nodes as images |
+| GET | `/api/figma/file/:file_key/comments` | List file comments |
+| GET | `/api/figma/file/:file_key/components` | List file components |
+| GET | `/api/figma/project/:project_id/files` | List project files |
 
 ## Environment Variables
 

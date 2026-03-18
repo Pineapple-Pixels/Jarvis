@@ -26,6 +26,7 @@ type Controllers struct {
 	Habit    *controller.HabitController
 	Link     *controller.LinkController
 	Project  *controller.ProjectController
+	Figma    *controller.FigmaController
 }
 
 func NewControllers(
@@ -77,6 +78,10 @@ func NewControllers(
 	}
 	if cl.ClickUp != nil {
 		c.ClickUp = controller.NewClickUpController(cl.ClickUp)
+	}
+
+	if cl.Figma != nil {
+		c.Figma = controller.NewFigmaController(cl.Figma)
 	}
 
 	if cl.WhatsApp != nil && cfg.WhatsAppVerifyToken != "" {

@@ -114,4 +114,13 @@ func registerRoutes(router boot.GinRouter, c Controllers) {
 	if c.Project != nil {
 		api.GET("/projects/:name/status", webgin.NewHandlerJSON(c.Project.GetStatus))
 	}
+
+	if c.Figma != nil {
+		api.GET("/figma/file/:file_key", webgin.NewHandlerJSON(c.Figma.GetFile))
+		api.GET("/figma/file/:file_key/nodes", webgin.NewHandlerJSON(c.Figma.GetNodes))
+		api.GET("/figma/file/:file_key/images", webgin.NewHandlerJSON(c.Figma.GetImages))
+		api.GET("/figma/file/:file_key/comments", webgin.NewHandlerJSON(c.Figma.GetComments))
+		api.GET("/figma/file/:file_key/components", webgin.NewHandlerJSON(c.Figma.GetComponents))
+		api.GET("/figma/project/:project_id/files", webgin.NewHandlerJSON(c.Figma.GetProjectFiles))
+	}
 }
