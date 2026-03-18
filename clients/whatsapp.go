@@ -23,15 +23,34 @@ func NewWhatsAppClient(phoneNumberID, accessToken string) *WhatsAppClient {
 	}
 }
 
-func (c *WhatsAppClient) SendTextMessage(to, text string) error {
-	url := fmt.Sprintf("https://graph.facebook.com/v18.0/%s/messages", c.phoneNumberID)
+const whatsAppMaxMessageLen = 4096
 
-	body := map[string]any{
-		"messaging_product": "whatsapp",
-		"to":                to,
-		"type":              "text",
-		"text":              map[string]string{"body": text},
+func (c *WhatsAppClient) SendTextMessage(to, text string) error {
+	chunks := splitMessage(text, whatsAppMaxMessageLen)
+	for _, chunk := range chunks {
+		if err := c.sendMessage(to, map[string]any{
+			"messaging_product": "whatsapp",
+			"to":                to,
+			"type":              "text",
+			"text":              map[string]string{"body": chunk},
+		}); err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+// MarkAsRead sends a read receipt so the user sees blue checkmarks.
+func (c *WhatsAppClient) MarkAsRead(messageID string) error {
+	return c.sendMessage("", map[string]any{
+		"messaging_product": "whatsapp",
+		"status":            "read",
+		"message_id":        messageID,
+	})
+}
+
+func (c *WhatsAppClient) sendMessage(to string, body map[string]any) error {
+	url := fmt.Sprintf("https://graph.facebook.com/v18.0/%s/messages", c.phoneNumberID)
 
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
@@ -58,4 +77,42 @@ func (c *WhatsAppClient) SendTextMessage(to, text string) error {
 	}
 
 	return nil
+}
+
+// splitMessage breaks text into chunks that fit within WhatsApp's character limit.
+// It tries to split at newlines, then spaces, falling back to hard cuts.
+func splitMessage(text string, maxLen int) []string {
+	if len(text) <= maxLen {
+		return []string{text}
+	}
+
+	var chunks []string
+	for len(text) > 0 {
+		if len(text) <= maxLen {
+			chunks = append(chunks, text)
+			break
+		}
+
+		chunk := text[:maxLen]
+		cutAt := maxLen
+
+		if idx := lastIndexByte(chunk, '\n'); idx > maxLen/2 {
+			cutAt = idx + 1
+		} else if idx := lastIndexByte(chunk, ' '); idx > maxLen/2 {
+			cutAt = idx + 1
+		}
+
+		chunks = append(chunks, text[:cutAt])
+		text = text[cutAt:]
+	}
+	return chunks
+}
+
+func lastIndexByte(s string, b byte) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == b {
+			return i
+		}
+	}
+	return -1
 }

@@ -23,6 +23,8 @@ type Config struct {
 	WhatsAppPhoneID    string
 	WhatsAppToken      string
 	WhatsAppTo         string
+	WhatsAppVerifyToken string
+	WhatsAppAppSecret  string
 	SQLiteDBPath       string
 	SkillsDir          string
 	NotionAPIKey       string
@@ -61,6 +63,8 @@ func Load() Config {
 		WhatsAppPhoneID:    os.Getenv("WHATSAPP_PHONE_NUMBER_ID"),
 		WhatsAppToken:      os.Getenv("WHATSAPP_ACCESS_TOKEN"),
 		WhatsAppTo:         os.Getenv("WHATSAPP_TO_NUMBER"),
+		WhatsAppVerifyToken: os.Getenv("WHATSAPP_VERIFY_TOKEN"),
+		WhatsAppAppSecret:  os.Getenv("WHATSAPP_APP_SECRET"),
 		SQLiteDBPath:       envOr("SQLITE_DB_PATH", "data/asistente.db"),
 		SkillsDir:          envOr("SKILLS_DIR", "skills"),
 		NotionAPIKey:       os.Getenv("NOTION_API_KEY"),

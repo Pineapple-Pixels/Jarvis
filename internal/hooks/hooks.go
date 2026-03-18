@@ -8,10 +8,11 @@ import (
 )
 
 const (
-	MessageReceived  = "message_received"
-	BeforeResponse   = "before_response"
-	AfterCompaction  = "after_compaction"
-	CronJobCompleted = "cron_job_completed"
+	MessageReceived          = "message_received"
+	BeforeResponse           = "before_response"
+	AfterCompaction          = "after_compaction"
+	CronJobCompleted         = "cron_job_completed"
+	WhatsAppMessageProcessed = "whatsapp_message_processed"
 )
 
 type Event struct {

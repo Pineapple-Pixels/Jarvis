@@ -13,6 +13,7 @@ type Controllers struct {
 	Finance  *controller.FinanceController
 	Memory   *controller.MemoryController
 	Chat     *controller.ConversationController
+	WhatsApp *controller.WhatsAppController
 	Notion   *controller.NotionController
 	Obsidian *controller.ObsidianController
 	Calendar *controller.CalendarController
@@ -76,6 +77,11 @@ func NewControllers(
 	}
 	if cl.ClickUp != nil {
 		c.ClickUp = controller.NewClickUpController(cl.ClickUp)
+	}
+
+	if cl.WhatsApp != nil && cfg.WhatsAppVerifyToken != "" {
+		waUC := usecase.NewWhatsAppUseCase(chatUC, financeUC, memorySvc, embedder, cl.AI, cl.WhatsApp, skillsLoader, hooksRegistry, cfg.WhatsAppTo)
+		c.WhatsApp = controller.NewWhatsAppController(waUC, cfg.WhatsAppVerifyToken, cfg.WhatsAppAppSecret)
 	}
 
 	return c

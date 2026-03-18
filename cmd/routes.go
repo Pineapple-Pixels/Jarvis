@@ -28,6 +28,12 @@ func registerRoutes(router boot.GinRouter, c Controllers) {
 		return web.NewJSONResponse(200, map[string]string{"status": "healthy"})
 	}))
 
+	if c.WhatsApp != nil {
+		webhook := router.Group("/webhook")
+		webhook.GET("/whatsapp", webgin.NewHandlerRaw(c.WhatsApp.VerifyWebhook))
+		webhook.POST("/whatsapp", webgin.NewHandlerJSON(c.WhatsApp.HandleWebhook))
+	}
+
 	api := router.Group("/api")
 
 	api.POST("/finance/expense", webgin.NewHandlerJSON(c.Finance.PostExpense))

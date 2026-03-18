@@ -32,7 +32,7 @@ func NewApp(cfg config.Config) *App {
 		hooksRegistry,
 	)
 
-	scheduler := NewScheduler(cl, cfg, hooksRegistry)
+	scheduler := NewScheduler(cl, cfg, memorySvc, hooksRegistry)
 	scheduler.Start()
 
 	return &App{

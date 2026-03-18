@@ -193,9 +193,25 @@ func (m *MockRequest) WithBody(body string) *MockRequest {
 	return m
 }
 
-func (m *MockRequest) Context() context.Context                           { return m.Ctx }
-func (m *MockRequest) Raw() *http.Request                                 { return &http.Request{} }
-func (m *MockRequest) DeclaredPath() string                               { return "" }
+func (m *MockRequest) WithHeader(key, value string) *MockRequest {
+	if m.HeadersMap == nil {
+		m.HeadersMap = make(map[string][]string)
+	}
+	m.HeadersMap[key] = append(m.HeadersMap[key], value)
+	return m
+}
+
+func (m *MockRequest) Context() context.Context { return m.Ctx }
+func (m *MockRequest) Raw() *http.Request {
+	r := &http.Request{Header: make(http.Header)}
+	if m.HeadersMap != nil {
+		for k, v := range m.HeadersMap {
+			r.Header[k] = v
+		}
+	}
+	return r
+}
+func (m *MockRequest) DeclaredPath() string { return "" }
 func (m *MockRequest) Params() []web.Param                                { return nil }
 func (m *MockRequest) Queries() url.Values                                { return nil }
 func (m *MockRequest) Headers() http.Header                               { return nil }
@@ -222,6 +238,23 @@ func (m *MockRequest) Query(key string) (string, bool) {
 }
 
 var _ web.Request = (*MockRequest)(nil)
+
+// MockWhatsAppSender mocks domain.WhatsAppSender.
+type MockWhatsAppSender struct {
+	mock.Mock
+}
+
+func (m *MockWhatsAppSender) SendTextMessage(to, text string) error {
+	args := m.Called(to, text)
+	return args.Error(0)
+}
+
+func (m *MockWhatsAppSender) MarkAsRead(messageID string) error {
+	args := m.Called(messageID)
+	return args.Error(0)
+}
+
+var _ domain.WhatsAppSender = (*MockWhatsAppSender)(nil)
 
 func NewMockClaudeServerError(statusCode int, errType, errMsg string) (*httptest.Server, domain.AIProvider) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

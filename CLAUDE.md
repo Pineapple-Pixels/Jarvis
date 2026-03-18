@@ -12,9 +12,8 @@ Asistente Personal — microservicio Go que funciona como backend de un asistent
 - **Framework**: Gin (via abstraccion framework-agnostic en `web/`)
 - **Database**: SQLite con WAL mode o PostgreSQL (configurable)
 - **AI**: Claude API (Anthropic) o OpenAI para parseo de lenguaje natural y embeddings
-- **Integrations**: Google Sheets, Google Calendar, Notion, Obsidian, WhatsApp Business, GitHub, Jira, Spotify, Todoist, Gmail, ClickUp
-- **Deploy**: Docker multi-stage, Oracle Cloud Free Tier
-- **Orchestrator**: n8n (self-hosted) para workflows de WhatsApp y cron visual
+- **Integrations**: Google Sheets, Google Calendar, Notion, Obsidian, WhatsApp Business (direct webhook), GitHub, Jira, Spotify, Todoist, Gmail, ClickUp
+- **Deploy**: Docker multi-stage, Hetzner VPS + Coolify
 
 ## Development Commands
 
@@ -77,7 +76,7 @@ internal/
 └── middleware/         ← Webhook auth interceptor
 
 test/
-└── mocks.go            ← MockMemoryService, MockEmbedder, MockAIProvider, MockRequest, MockClaudeServer
+└── mocks.go            ← MockMemoryService, MockEmbedder, MockAIProvider, MockWhatsAppSender, MockRequest, MockClaudeServer
 
 web/                    ← Framework-agnostic HTTP abstractions (from template)
 boot/                   ← Server bootstrap (from template)
@@ -104,6 +103,7 @@ HTTP Request → Controller → UseCase → Service (DB/API) → UseCase → Con
 - **Context Engine**: Ingest → Assemble → Compact (multi-stage with fallback)
 - **Hybrid search**: Vector + FTS5 with fallback chain
 - **Graceful shutdown**: SIGINT/SIGTERM handling con deferred cleanup
+- **WhatsApp webhook**: Direct Meta integration with HMAC-SHA256 signature verification, intent-based routing (expense/note/chat), async processing
 
 ## API Endpoints
 
@@ -111,6 +111,8 @@ HTTP Request → Controller → UseCase → Service (DB/API) → UseCase → Con
 |--------|------|-------------|
 | GET | `/health` | Health check |
 | GET | `/ping` | Ping/pong (built-in) |
+| GET | `/webhook/whatsapp` | Meta webhook verification (challenge/response) |
+| POST | `/webhook/whatsapp` | Incoming WhatsApp messages (intent detection + routing) |
 | POST | `/api/finance/expense` | Parse expense and save to Sheets |
 | GET | `/api/finance/summary` | Financial summary by period |
 | POST | `/api/memory/note` | Save note with embedding |

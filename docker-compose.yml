@@ -1,65 +1,15 @@
 services:
-  postgres:
-    image: postgres:15
-    restart: always
-    environment:
-      POSTGRES_USER: n8n
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: n8n
-      POSTGRES_MULTIPLE_DATABASES: n8n,asistente
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/create-multiple-dbs.sh:/docker-entrypoint-initdb.d/create-multiple-dbs.sh:ro
-
-  redis:
-    image: redis:7
-    restart: always
-
-  n8n:
-    image: n8nio/n8n
-    restart: always
-    environment:
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=postgres
-      - QUEUE_BULL_REDIS_HOST=redis
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=${N8N_USER}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
-      - WEBHOOK_URL=https://${DOMAIN}
-    volumes:
-      - n8n_data:/home/node/.n8n
-    depends_on:
-      - postgres
-      - redis
-
   asistente:
     build: .
     restart: always
     ports:
-      - "127.0.0.1:8080:8080"
+      - "8080:8080"
     env_file:
       - .env
     volumes:
       - ./credentials.json:/app/credentials.json:ro
       - sqlite_data:/app/data
       - ./skills:/app/skills:ro
-    depends_on:
-      - postgres
-
-  nginx:
-    image: nginx:alpine
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./certs:/etc/letsencrypt:ro
-    depends_on:
-      - n8n
-      - asistente
 
 volumes:
-  postgres_data:
-  n8n_data:
   sqlite_data:

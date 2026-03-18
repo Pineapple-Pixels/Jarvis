@@ -72,8 +72,10 @@ var (
 	ErrCalendarList   = errors.New("failed to list events")
 	ErrCalendarInsert = errors.New("failed to create event")
 
-	ErrWhatsAppSend = errors.New("failed to send whatsapp message")
-	ErrWhatsAppAPI  = errors.New("whatsapp api error")
+	ErrWhatsAppSend    = errors.New("failed to send whatsapp message")
+	ErrWhatsAppAPI     = errors.New("whatsapp api error")
+	ErrWhatsAppWebhook = errors.New("whatsapp webhook error")
+	ErrWhatsAppVerify  = errors.New("whatsapp verification failed")
 
 	ErrGitHubRequest = errors.New("github api request failed")
 	ErrGitHubParse   = errors.New("failed to parse github response")

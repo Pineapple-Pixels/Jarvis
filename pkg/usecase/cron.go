@@ -11,6 +11,7 @@ import (
 	"asistente/clients"
 	"asistente/internal/hooks"
 	"asistente/pkg/domain"
+	"asistente/pkg/service"
 )
 
 const schedulerTickInterval = 1 * time.Minute
@@ -92,7 +93,7 @@ func (s *Scheduler) runJob(job *domain.Job, now time.Time) {
 	})
 }
 
-func NewDailyBriefingJob(ai domain.AIProvider, waNumber string, waClient *clients.WhatsAppClient, calendarClient *clients.CalendarClient) domain.Job {
+func NewDailyBriefingJob(ai domain.AIProvider, waNumber string, waClient *clients.WhatsAppClient, calendarClient *clients.CalendarClient, gmailClient *clients.GmailClient, memorySvc service.MemoryService) domain.Job {
 	return domain.Job{
 		ID:     domain.JobDailyBriefing,
 		Hour:   domain.DailyBriefingHour,
@@ -115,6 +116,29 @@ func NewDailyBriefingJob(ai domain.AIProvider, waNumber string, waClient *client
 						evStr = append(evStr, fmt.Sprintf("- %s (%s)", e.Summary, e.Start.Format(domain.TimeFormatCronDisplay)))
 					}
 					parts = append(parts, "Eventos de hoy:\n"+strings.Join(evStr, "\n"))
+				}
+			}
+
+			if gmailClient != nil {
+				emails, err := gmailClient.ListUnread(5)
+				if err == nil && len(emails) > 0 {
+					var emStr []string
+					for _, e := range emails {
+						emStr = append(emStr, fmt.Sprintf("- %s (de %s)", e.Subject, e.From))
+					}
+					parts = append(parts, "Emails sin leer:\n"+strings.Join(emStr, "\n"))
+				}
+			}
+
+			if memorySvc != nil {
+				today := time.Now().Format(domain.DateFormatISO)
+				expenses, err := memorySvc.ListExpenses(today, today)
+				if err == nil && len(expenses) > 0 {
+					total := 0.0
+					for _, e := range expenses {
+						total += e.Amount
+					}
+					parts = append(parts, fmt.Sprintf("Gastos de hoy: $%.0f (%d gastos)", total, len(expenses)))
 				}
 			}
 
