@@ -43,6 +43,8 @@ type Config struct {
 	ClickUpAPIToken    string
 	ClickUpTeamID      string
 	FigmaAccessToken   string
+	TelegramBotToken   string
+	TelegramSecretToken string
 }
 
 func Load() Config {
@@ -83,7 +85,9 @@ func Load() Config {
 		GmailUserEmail:     os.Getenv("GMAIL_USER_EMAIL"),
 		ClickUpAPIToken:    os.Getenv("CLICKUP_API_TOKEN"),
 		ClickUpTeamID:      os.Getenv("CLICKUP_TEAM_ID"),
-		FigmaAccessToken:   os.Getenv("FIGMA_ACCESS_TOKEN"),
+		FigmaAccessToken:    os.Getenv("FIGMA_ACCESS_TOKEN"),
+		TelegramBotToken:    os.Getenv("TELEGRAM_BOT_TOKEN"),
+		TelegramSecretToken: os.Getenv("TELEGRAM_SECRET_TOKEN"),
 	}
 }
 

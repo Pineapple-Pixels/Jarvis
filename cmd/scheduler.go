@@ -14,5 +14,6 @@ func NewScheduler(cl Clients, cfg config.Config, memorySvc service.MemoryService
 		usecase.NewWeeklyFinanceJob(cl.AI, cfg.WhatsAppTo, cl.WhatsApp),
 		usecase.NewBudgetAlertJob(cl.AI, cfg.WhatsAppTo, cl.WhatsApp),
 		usecase.NewDailyJournalJob(cl.AI, cfg.WhatsAppTo, cl.WhatsApp),
+		usecase.NewSessionPruningJob(memorySvc),
 	}, hooksRegistry)
 }

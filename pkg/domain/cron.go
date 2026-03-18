@@ -10,15 +10,19 @@ const (
 	DeliveryModeLog      = "log"
 	DeliveryModeWebhook  = "webhook"
 
-	JobDailyBriefing = "daily-briefing"
-	JobWeeklyFinance = "weekly-finance"
-	JobBudgetAlert   = "budget-alert"
-	JobDailyJournal  = "daily-journal"
+	JobDailyBriefing  = "daily-briefing"
+	JobWeeklyFinance  = "weekly-finance"
+	JobBudgetAlert    = "budget-alert"
+	JobDailyJournal   = "daily-journal"
+	JobSessionPruning = "session-pruning"
 
-	DailyBriefingHour = 8
-	WeeklyFinanceHour = 20
-	BudgetAlertHour   = 21
-	DailyJournalHour  = 22
+	DailyBriefingHour  = 8
+	WeeklyFinanceHour  = 20
+	BudgetAlertHour    = 21
+	DailyJournalHour   = 22
+	SessionPruningHour = 3
+
+	SessionTTLDays = 30
 	MinRunInterval    = 2 * time.Minute
 
 	CronSystemPrompt     = "Sos un asistente personal. Genera contenido conciso y util."

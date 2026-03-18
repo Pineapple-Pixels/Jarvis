@@ -2,8 +2,11 @@ package usecase
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"strings"
+	"sync"
 
 	"asistente/internal/hooks"
 	"asistente/internal/skills"
@@ -22,6 +25,11 @@ type MessageRouter struct {
 	skills       skills.SkillProvider
 	hooks        *hooks.Registry
 	allowedFrom  string
+
+	// Pairing: authorize unknown senders via a one-time code.
+	pairingMu    sync.RWMutex
+	pairingCode  string
+	pairedSenders map[string]bool
 }
 
 func NewMessageRouter(
@@ -34,23 +42,45 @@ func NewMessageRouter(
 	hooksRegistry *hooks.Registry,
 	allowedFrom string,
 ) *MessageRouter {
-	return &MessageRouter{
-		conversation: conversation,
-		finance:      finance,
-		memorySvc:    memorySvc,
-		embedder:     embedder,
-		ai:           ai,
-		skills:       skillsProvider,
-		hooks:        hooksRegistry,
-		allowedFrom:  allowedFrom,
+	code := generatePairingCode()
+	if allowedFrom == "" {
+		log.Printf("message-router: pairing code for new senders: %s", code)
 	}
+
+	return &MessageRouter{
+		conversation:  conversation,
+		finance:       finance,
+		memorySvc:     memorySvc,
+		embedder:      embedder,
+		ai:            ai,
+		skills:        skillsProvider,
+		hooks:         hooksRegistry,
+		allowedFrom:   allowedFrom,
+		pairingCode:   code,
+		pairedSenders: make(map[string]bool),
+	}
+}
+
+// GetPairingCode returns the current pairing code for authorizing new senders.
+func (r *MessageRouter) GetPairingCode() string {
+	r.pairingMu.RLock()
+	defer r.pairingMu.RUnlock()
+	return r.pairingCode
+}
+
+func generatePairingCode() string {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return "0000"
+	}
+	return hex.EncodeToString(b)
 }
 
 // ProcessMessage handles an incoming text message from any channel.
 // It detects intent, delegates to the appropriate usecase, and sends a reply.
 func (r *MessageRouter) ProcessMessage(ch domain.Channel, from, messageID, text string) {
-	if r.allowedFrom != "" && from != r.allowedFrom {
-		log.Printf("%s: ignoring message from unauthorized sender %s", ch.Name(), from)
+	if !r.isAuthorized(from) {
+		r.handleUnauthorized(ch, from, messageID, text)
 		return
 	}
 
@@ -204,6 +234,37 @@ func (r *MessageRouter) buildSystemPrompt(message, channelName string) string {
 	sb.WriteString(skills.FormatForPrompt(relevant))
 
 	return sb.String()
+}
+
+func (r *MessageRouter) isAuthorized(from string) bool {
+	// If allowedFrom is set, only that sender is authorized (legacy behavior).
+	if r.allowedFrom != "" {
+		return from == r.allowedFrom
+	}
+
+	// Otherwise, check if sender has been paired.
+	r.pairingMu.RLock()
+	defer r.pairingMu.RUnlock()
+	return r.pairedSenders[from]
+}
+
+func (r *MessageRouter) handleUnauthorized(ch domain.Channel, from, messageID, text string) {
+	trimmed := strings.TrimSpace(text)
+
+	r.pairingMu.Lock()
+	defer r.pairingMu.Unlock()
+
+	if trimmed == r.pairingCode {
+		r.pairedSenders[from] = true
+		// Rotate the pairing code after successful pairing.
+		r.pairingCode = generatePairingCode()
+		log.Printf("%s: sender %s paired successfully, new code: %s", ch.Name(), from, r.pairingCode)
+		_ = ch.SendMessage(from, "Paired! Ya estás autorizado para hablarme.")
+		return
+	}
+
+	log.Printf("%s: unauthorized sender %s (send pairing code to connect)", ch.Name(), from)
+	_ = ch.SendMessage(from, "No te conozco. Enviame el código de vinculación para conectarte.")
 }
 
 func stripNotePrefix(text string) string {

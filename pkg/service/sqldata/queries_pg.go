@@ -39,3 +39,6 @@ var PGDeleteMemory string
 
 //go:embed postgres/delete/clear_conversation.sql
 var PGClearConversation string
+
+//go:embed postgres/delete/prune_conversations.sql
+var PGPruneConversations string

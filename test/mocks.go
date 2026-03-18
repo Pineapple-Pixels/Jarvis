@@ -89,6 +89,11 @@ func (m *MockMemoryService) ListExpenses(from, to string) ([]domain.Expense, err
 	return args.Get(0).([]domain.Expense), args.Error(1)
 }
 
+func (m *MockMemoryService) PruneSessions(olderThanDays int) (int64, error) {
+	args := m.Called(olderThanDays)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func (m *MockMemoryService) Close() error {
 	args := m.Called()
 	return args.Error(0)

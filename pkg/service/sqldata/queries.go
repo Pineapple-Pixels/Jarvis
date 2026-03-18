@@ -39,3 +39,6 @@ var DeleteMemory string
 
 //go:embed sqlite/delete/clear_conversation.sql
 var ClearConversation string
+
+//go:embed sqlite/delete/prune_conversations.sql
+var PruneConversations string

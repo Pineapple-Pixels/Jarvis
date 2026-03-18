@@ -1,439 +1,229 @@
-# Deploy & Operacional — Tutorial paso a paso
+# Deploy Guide — Hetzner + Coolify
 
-Guia para llevar el microservicio de local a produccion en Oracle Cloud.
+## Prerequisitos
 
----
-
-## 1. Pre-requisitos
-
-Antes de arrancar necesitas tener:
-
-- [ ] Cuenta en Oracle Cloud (cloud.oracle.com/free) con VM creada (Ubuntu 22.04, VM.Standard.A1.Flex)
-- [ ] Puertos abiertos en Security List: 22, 80, 443
-- [ ] Clave SSH para conectarte a la VM
-- [ ] Dominio apuntando a la IP de Oracle (ej: `sebas-asistente.duckdns.org`)
-- [ ] API keys: Claude o OpenAI, Google Service Account (`credentials.json`), WhatsApp Business
-- [ ] `.env` completo con todas las variables (copiar de `.env.example`)
+- Cuenta en [Hetzner Cloud](https://console.hetzner.cloud)
+- Repo en GitHub
+- Dominio o subdomain (o DuckDNS gratis)
+- API keys: Claude/OpenAI, WhatsApp Business, Google credentials, etc.
 
 ---
 
-## 2. Preparar la VM
+## 1. Crear VPS en Hetzner (~2 min)
 
-### 2.1 Conectarse
+1. Ir a [console.hetzner.cloud](https://console.hetzner.cloud)
+2. **Create Server**:
+   - **Location**: Nuremberg (eu-central) o el más cercano
+   - **Image**: Ubuntu 24.04
+   - **Type**: CX22 (2 vCPU, 4GB RAM, 40GB SSD) — **~€4.5/mes**
+   - **SSH Key**: agregar tu clave pública
+   - **Name**: `asistente`
+3. Click **Create & Buy**
+4. Anotar la IP pública
 
-```bash
-ssh -i oracle_key ubuntu@TU_IP_ORACLE
-```
-
-### 2.2 Instalar Docker
-
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install docker.io docker-compose-plugin -y
-sudo systemctl enable docker
-sudo usermod -aG docker ubuntu
-# Desloguear y volver a loguear para que tome el grupo
-exit
-ssh -i oracle_key ubuntu@TU_IP_ORACLE
-```
-
-### 2.3 Verificar Docker
-
-```bash
-docker --version
-docker compose version
-```
+> Tu stack (1 binario Go + SQLite) usa ~200MB RAM. CX22 sobra.
 
 ---
 
-## 3. SSL con Let's Encrypt
-
-### 3.1 Instalar Certbot
+## 2. Instalar Coolify (~1 min)
 
 ```bash
-sudo apt install certbot -y
+ssh root@TU_IP
+curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
 ```
 
-### 3.2 Generar certificado
-
-```bash
-# Asegurate de que el puerto 80 este libre
-sudo certbot certonly --standalone -d TU_DOMINIO.duckdns.org
-```
-
-Los certificados quedan en:
-- `/etc/letsencrypt/live/TU_DOMINIO.duckdns.org/fullchain.pem`
-- `/etc/letsencrypt/live/TU_DOMINIO.duckdns.org/privkey.pem`
-
-### 3.3 Auto-renovacion
-
-```bash
-sudo crontab -e
-# Agregar:
-0 3 * * * certbot renew --quiet && docker compose restart nginx
-```
+Esperá 2-3 minutos. Accedé a `http://TU_IP:8000` y creá tu cuenta admin.
 
 ---
 
-## 4. Subir el proyecto
+## 3. Conectar dominio
 
-### 4.1 Clonar el repo
-
-```bash
-cd ~
-git clone TU_REPO_URL asistente
-cd asistente
+### Opción A: Dominio propio
+```
+asistente.tudominio.com  →  A  →  TU_IP
 ```
 
-### 4.2 Configurar environment
+### Opción B: DuckDNS (gratis)
+1. Ir a [duckdns.org](https://www.duckdns.org)
+2. Crear subdominio → apuntarlo a tu IP
 
-```bash
-cp .env.example .env
-nano .env
-# Completar todas las variables: API keys, DB path, WhatsApp, etc.
+---
+
+## 4. Configurar proyecto en Coolify
+
+1. **Projects** → **New** → **New Resource** → **Public Repository**
+2. URL: `https://github.com/TU_USUARIO/ai-assistant`
+3. Branch: `main`
+4. **Build Pack**: Docker Compose
+
+### Variables de entorno
+
+En Coolify → **Environment Variables**:
+
+```env
+# Requeridas
+CLAUDE_API_KEY=sk-ant-...
+WHATSAPP_PHONE_NUMBER_ID=tu-phone-id
+WHATSAPP_ACCESS_TOKEN=tu-token
+WHATSAPP_TO_NUMBER=5491112345678
+WHATSAPP_VERIFY_TOKEN=un-token-random
+WHATSAPP_APP_SECRET=tu-app-secret-de-meta
+
+# Opcionales
+OPENAI_API_KEY=sk-...
+GOOGLE_SHEETS_ID=tu-spreadsheet-id
+GOOGLE_CALENDAR_ID=tu-calendar@group.calendar.google.com
+GMAIL_USER_EMAIL=tu@gmail.com
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+TELEGRAM_SECRET_TOKEN=un-secret-random
+FIGMA_ACCESS_TOKEN=tu-figma-token
+NOTION_API_KEY=secret_...
+GITHUB_TOKEN=ghp_...
+TODOIST_API_TOKEN=...
 ```
 
-### 4.3 Subir credentials.json
-
-Desde tu maquina local:
+### Subir credentials.json (Google)
 
 ```bash
-scp -i oracle_key credentials.json ubuntu@TU_IP_ORACLE:~/asistente/credentials.json
+scp credentials.json root@TU_IP:/opt/coolify/credentials.json
 ```
 
 ---
 
-## 5. Configurar Nginx
+## 5. SSL (automático)
 
-### 5.1 Crear nginx.conf
+1. En Coolify → configuración del recurso → **Domains**
+2. Agregar: `asistente.tudominio.com`
+3. Coolify genera certificado Let's Encrypt automáticamente
+
+---
+
+## 6. Configurar WhatsApp webhook
+
+1. [developers.facebook.com](https://developers.facebook.com) → tu app → WhatsApp → Configuration
+2. **Callback URL**: `https://TU_DOMINIO/webhook/whatsapp`
+3. **Verify Token**: mismo valor que `WHATSAPP_VERIFY_TOKEN`
+4. Subscribir al campo `messages`
+
+---
+
+## 7. Configurar Telegram webhook (opcional)
 
 ```bash
-cp nginx.conf.example nginx.conf
-nano nginx.conf
-```
-
-Asegurate de que tenga:
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name TU_DOMINIO.duckdns.org;
-
-    ssl_certificate /etc/letsencrypt/live/TU_DOMINIO.duckdns.org/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/TU_DOMINIO.duckdns.org/privkey.pem;
-
-    # Microservicio Go
-    location /api/ {
-        proxy_pass http://asistente:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    location /health {
-        proxy_pass http://asistente:8080;
-    }
-
-    # n8n
-    location /webhook/ {
-        proxy_pass http://n8n:5678;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-
-server {
-    listen 80;
-    server_name TU_DOMINIO.duckdns.org;
-    return 301 https://$host$request_uri;
-}
+curl "https://api.telegram.org/botTU_BOT_TOKEN/setWebhook\
+?url=https://TU_DOMINIO/webhook/telegram\
+&secret_token=TU_TELEGRAM_SECRET_TOKEN"
 ```
 
 ---
 
-## 6. Deploy con Docker Compose
-
-### 6.1 Build y levantar
+## 8. Verificar
 
 ```bash
-# Solo el microservicio
-make docker
+# Health check
+curl https://TU_DOMINIO/health
 
-# Full stack (asistente + n8n + nginx + postgres)
-make docker-all
-```
+# Jobs cron disponibles
+curl https://TU_DOMINIO/api/triggers/jobs
 
-### 6.2 Verificar que levanto
+# Disparar briefing manualmente
+curl -X POST https://TU_DOMINIO/api/triggers/job/daily-briefing
 
-```bash
-docker compose ps
-# Todos los servicios deben estar "Up"
+# Ver pairing code (para autorizar nuevos senders)
+curl https://TU_DOMINIO/api/pairing-code
 
-curl http://localhost:8080/health
-# {"status":"healthy"}
+# Probar chat
+curl -X POST https://TU_DOMINIO/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"hola","sender":"test"}'
 
-curl https://TU_DOMINIO.duckdns.org/health
-# {"status":"healthy"}
-```
+# Listar skills
+curl https://TU_DOMINIO/api/skills
 
-### 6.3 Ver logs
-
-```bash
-# Todos
-docker compose logs -f
-
-# Solo el microservicio
-docker compose logs -f asistente
-
-# Solo n8n
-docker compose logs -f n8n
+# Crear un skill nuevo
+curl -X POST https://TU_DOMINIO/api/skills \
+  -H "Content-Type: application/json" \
+  -d '{"name":"test","content":"Sos un asistente de prueba.","tags":["test"]}'
 ```
 
 ---
 
-## 7. Configurar WhatsApp webhook de entrada
+## 9. Deploy automático
 
-### 7.1 Facebook Developer Console
+1. Coolify → configuración → **Webhooks** → copiar URL
+2. GitHub → **Settings** → **Webhooks** → **Add webhook**
+3. Pegar URL, content type `application/json`, trigger en `push`
 
-1. Ir a developers.facebook.com
-2. Tu app → WhatsApp → Configuration
-3. Webhook URL: `https://TU_DOMINIO.duckdns.org/webhook/whatsapp`
-4. Verify Token: el mismo valor que `WEBHOOK_SECRET` en tu `.env`
-5. Suscribirse a: `messages`
-
-### 7.2 Opcion A: n8n como receptor
-
-Crear un workflow en n8n:
-
-```
-[Webhook Trigger] → [Code: extraer mensaje] → [HTTP Request: POST al microservicio] → [HTTP Request: responder por WhatsApp]
-```
-
-El Code node:
-
-```javascript
-const body = $input.first().json.body;
-const entry = body.entry?.[0];
-const change = entry?.changes?.[0];
-const message = change?.value?.messages?.[0];
-
-if (!message) return [];
-
-return [{
-  json: {
-    from: message.from,
-    text: message.text?.body || '',
-    timestamp: message.timestamp
-  }
-}];
-```
-
-El HTTP Request al microservicio:
-
-```
-POST http://asistente:8080/api/chat
-Headers: X-Webhook-Secret: {{$env.WEBHOOK_SECRET}}
-Body: {
-  "message": "{{$json.text}}",
-  "sender": "{{$json.from}}",
-  "session_id": "wa-{{$json.from}}"
-}
-```
-
-### 7.3 Opcion B: endpoint directo en el microservicio (pendiente de implementar)
-
-Esto requiere crear un controller nuevo `WhatsAppWebhookController` que:
-1. Reciba el POST de Meta
-2. Verifique la firma
-3. Extraiga el mensaje
-4. Llame al chat usecase
-5. Responda via WhatsApp client
-
-Si elegis esta opcion, el endpoint seria `POST /api/whatsapp/webhook` y `GET /api/whatsapp/webhook` (para la verificacion de Meta).
+Cada `git push` a `main` → rebuild + redeploy automático.
 
 ---
 
-## 8. Rate Limiting
-
-### 8.1 Opcion simple: Nginx
-
-Agregar al `nginx.conf` dentro del bloque `http`:
-
-```nginx
-limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
-
-server {
-    location /api/ {
-        limit_req zone=api burst=20 nodelay;
-        proxy_pass http://asistente:8080;
-    }
-}
-```
-
-Esto limita a 10 requests por segundo por IP con burst de 20.
-
-### 8.2 Opcion Go: middleware
-
-Si necesitas mas control, crear un middleware en `internal/middleware/ratelimit.go` usando `golang.org/x/time/rate`:
-
-```go
-func RateLimit(rps int) web.Interceptor {
-    limiter := rate.NewLimiter(rate.Limit(rps), rps*2)
-    return func(req web.InterceptedRequest) web.Response {
-        if !limiter.Allow() {
-            return web.NewJSONResponse(429, map[string]string{"error": "rate limit exceeded"})
-        }
-        return req.Next()
-    }
-}
-```
-
-Registrarlo en `cmd/routes.go` dentro de `middlewareMapper()`.
-
----
-
-## 9. Spotify OAuth Refresh
-
-El access token de Spotify expira cada hora. Para produccion necesitas refresh automatico.
-
-### 9.1 Obtener refresh token
-
-1. Ir a developer.spotify.com → tu app → Credentials
-2. Usar el Authorization Code flow para obtener un `refresh_token`
-3. Guardar el `refresh_token` en `.env` como `SPOTIFY_REFRESH_TOKEN`
-
-### 9.2 Implementar refresh en el client
-
-Agregar a `clients/spotify.go`:
-
-```go
-type SpotifyClient struct {
-    accessToken  string
-    refreshToken string
-    clientID     string
-    clientSecret string
-    httpClient   *http.Client
-    mu           sync.Mutex
-}
-
-func (c *SpotifyClient) refreshAccessToken() error {
-    // POST https://accounts.spotify.com/api/token
-    // grant_type=refresh_token&refresh_token=XXX
-    // Basic auth con clientID:clientSecret
-    // Parsear response y actualizar c.accessToken
-}
-```
-
-Llamar `refreshAccessToken()` cuando un request devuelva 401.
-
----
-
-## 10. Backup de SQLite
-
-### 10.1 Script de backup
-
-Crear `scripts/backup.sh`:
+## 10. Testear localmente
 
 ```bash
-#!/bin/bash
-BACKUP_DIR=~/backups/asistente
-DATE=$(date +%Y%m%d_%H%M)
-DB_PATH=./data/asistente.db
-
-mkdir -p $BACKUP_DIR
-
-# SQLite hot backup (safe con WAL mode)
-sqlite3 $DB_PATH ".backup '$BACKUP_DIR/asistente_$DATE.db'"
-
-# Mantener solo los ultimos 7 dias
-find $BACKUP_DIR -name "*.db" -mtime +7 -delete
-
-echo "Backup completado: asistente_$DATE.db"
-```
-
-### 10.2 Programar con cron
-
-```bash
-chmod +x scripts/backup.sh
-crontab -e
-# Agregar:
-0 4 * * * cd ~/asistente && ./scripts/backup.sh >> ~/backups/backup.log 2>&1
-```
-
-Esto hace backup todos los dias a las 4am y mantiene los ultimos 7.
-
-### 10.3 Backup offsite (opcional)
-
-Para copiar a otro lugar:
-
-```bash
-# Al final de backup.sh agregar:
-rclone copy $BACKUP_DIR/asistente_$DATE.db gdrive:backups/asistente/
-```
-
-Requiere configurar `rclone` con Google Drive u otro cloud storage.
-
----
-
-## 11. Monitoreo basico
-
-### 11.1 Health check con cron
-
-```bash
-crontab -e
-# Agregar:
-*/5 * * * * curl -sf http://localhost:8080/health > /dev/null || docker compose restart asistente
-```
-
-Si el health check falla, reinicia el container automaticamente.
-
-### 11.2 Logs persistentes
-
-```bash
-# docker-compose.yml — agregar a cada servicio:
-logging:
-  driver: json-file
-  options:
-    max-size: "10m"
-    max-file: "3"
-```
-
-### 11.3 Disk space alert
-
-```bash
-# Agregar al crontab:
-0 8 * * * df -h / | awk 'NR==2{if(int($5)>80) print "DISK ALERT: "$5" used"}' | mail -s "Disk Alert" tu@email.com
+make test          # Correr 280+ tests
+make build         # Build local
+make docker        # Docker local en http://localhost:8080
+curl localhost:8080/health
 ```
 
 ---
 
-## 12. Checklist de deploy
+## Arquitectura en producción
 
-### Pre-deploy
+```
+Internet
+  │
+  ├── WhatsApp (Meta) ──→ POST /webhook/whatsapp
+  ├── Telegram ──────────→ POST /webhook/telegram
+  └── Browser/CLI ───────→ GET/POST /api/*
+  │
+  ▼
+Coolify (reverse proxy + SSL)
+  │
+  ▼
+Docker: asistente (Go + SQLite)
+  ├── Port 8080
+  ├── /app/data/asistente.db  (volumen persistente)
+  ├── /app/skills/             (skills hot-reload)
+  └── /app/credentials.json    (Google service account)
+```
 
-- [ ] `.env` completo con todas las variables
-- [ ] `credentials.json` presente
-- [ ] `nginx.conf` configurado con tu dominio
-- [ ] Certificado SSL generado
-- [ ] Puertos 80 y 443 abiertos en Oracle Security List
+**Cron jobs** (automáticos):
+| Job | Hora | Descripción |
+|-----|------|-------------|
+| `daily-briefing` | 08:00 | Calendario + Gmail + gastos → resumen por WhatsApp |
+| `weekly-finance` | 20:00 dom | Recordatorio de gastos semanales |
+| `budget-alert` | 21:00 | Alerta de presupuesto |
+| `daily-journal` | 22:00 | Prompt de journaling |
+| `session-pruning` | 03:00 | Limpia sesiones > 30 días |
 
-### Deploy
-
-- [ ] `git pull` en la VM
-- [ ] `make docker-all`
-- [ ] `docker compose ps` — todos Up
-- [ ] `curl https://TU_DOMINIO/health` — responde OK
-- [ ] Probar `POST /api/finance/expense` con un gasto de prueba
-- [ ] Verificar que aparece en Google Sheets
-
-### Post-deploy
-
-- [ ] Configurar WhatsApp webhook en Facebook Developer Console
-- [ ] Probar enviar mensaje por WhatsApp y ver que responde
-- [ ] Configurar cron de backup
-- [ ] Configurar cron de health check
-- [ ] Configurar auto-renovacion SSL
-- [ ] Verificar que los cron jobs del microservicio funcionan (esperar al horario o testear manualmente)
+Todos los jobs se pueden disparar manualmente: `POST /api/triggers/job/:id`
 
 ---
 
-*Ultima actualizacion: 11 de marzo de 2026*
+## Troubleshooting
+
+```bash
+# Ver logs
+ssh root@TU_IP
+docker logs -f $(docker ps -q --filter name=asistente)
+
+# Backup SQLite
+docker cp $(docker ps -q --filter name=asistente):/app/data/asistente.db ./backup.db
+
+# Reiniciar
+# → Desde la UI de Coolify: botón Restart
+
+# WhatsApp webhook no funciona
+# 1. curl https://TU_DOMINIO/health → debe responder
+# 2. Verify token debe coincidir
+# 3. Meta requiere HTTPS (Coolify lo maneja)
+
+# Telegram webhook no funciona
+# curl "https://api.telegram.org/botTU_TOKEN/getWebhookInfo"
+```
+
+---
+
+*Última actualización: 18 de marzo de 2026*

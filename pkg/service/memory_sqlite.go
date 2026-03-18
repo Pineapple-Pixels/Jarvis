@@ -3,6 +3,7 @@ package service
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -294,6 +295,14 @@ func (s *SQLiteMemoryService) ListExpenses(from, to string) ([]domain.Expense, e
 		expenses = append(expenses, e)
 	}
 	return expenses, nil
+}
+
+func (s *SQLiteMemoryService) PruneSessions(olderThanDays int) (int64, error) {
+	result, err := s.db.Exec(sqldata.PruneConversations, fmt.Sprintf("-%d", olderThanDays))
+	if err != nil {
+		return 0, domain.Wrapf(domain.ErrStoreDelete, err)
+	}
+	return result.RowsAffected()
 }
 
 func (s *SQLiteMemoryService) Close() error {

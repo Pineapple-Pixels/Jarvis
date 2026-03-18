@@ -23,6 +23,7 @@ type Clients struct {
 	Gmail    *clients.GmailClient
 	ClickUp  *clients.ClickUpClient
 	Figma    *clients.FigmaClient
+	Telegram *clients.TelegramClient
 }
 
 func NewClients(cfg config.Config) Clients {
@@ -42,6 +43,7 @@ func NewClients(cfg config.Config) Clients {
 		Gmail:    newGmailClient(cfg),
 		ClickUp:  newClickUpClient(cfg),
 		Figma:    newFigmaClient(cfg),
+		Telegram: newTelegramClient(cfg),
 	}
 }
 
@@ -195,6 +197,14 @@ func newClickUpClient(cfg config.Config) *clients.ClickUpClient {
 	}
 	log.Println("ClickUp client configured")
 	return clients.NewClickUpClient(cfg.ClickUpAPIToken, cfg.ClickUpTeamID)
+}
+
+func newTelegramClient(cfg config.Config) *clients.TelegramClient {
+	if cfg.TelegramBotToken == "" {
+		return nil
+	}
+	log.Println("Telegram client configured")
+	return clients.NewTelegramClient(cfg.TelegramBotToken)
 }
 
 func newFigmaClient(cfg config.Config) *clients.FigmaClient {

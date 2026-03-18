@@ -58,6 +58,8 @@ type MemoryService interface {
 
 	ListExpenses(from, to string) ([]domain.Expense, error)
 
+	PruneSessions(olderThanDays int) (int64, error)
+
 	Close() error
 }
 

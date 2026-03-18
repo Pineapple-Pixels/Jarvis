@@ -1,12 +1,15 @@
 package main
 
 import (
+	"net/http"
+
 	"asistente/config"
 	"asistente/internal/hooks"
 	"asistente/internal/skills"
 	"asistente/pkg/controller"
 	"asistente/pkg/service"
 	"asistente/pkg/usecase"
+	"asistente/web"
 )
 
 type Controllers struct {
@@ -27,8 +30,10 @@ type Controllers struct {
 	Link     *controller.LinkController
 	Project  *controller.ProjectController
 	Figma    *controller.FigmaController
+	Telegram *controller.TelegramController
 	Skill    *controller.SkillController
 	Trigger  *controller.TriggerController
+	Pairing  web.Handler
 }
 
 func NewControllers(
@@ -93,9 +98,26 @@ func NewControllers(
 		c.Figma = controller.NewFigmaController(cl.Figma)
 	}
 
-	if cl.WhatsApp != nil && cfg.WhatsAppVerifyToken != "" {
-		router := usecase.NewMessageRouter(chatUC, financeUC, memorySvc, embedder, cl.AI, skillsLoader, hooksRegistry, cfg.WhatsAppTo)
+	// Shared MessageRouter for all messaging channels.
+	var router *usecase.MessageRouter
+	if cl.WhatsApp != nil || cl.Telegram != nil {
+		router = usecase.NewMessageRouter(chatUC, financeUC, memorySvc, embedder, cl.AI, skillsLoader, hooksRegistry, cfg.WhatsAppTo)
+	}
+
+	if router != nil {
+		c.Pairing = func(req web.Request) web.Response {
+			return web.NewJSONResponse(http.StatusOK, map[string]any{
+				"success": true, "pairing_code": router.GetPairingCode(),
+			})
+		}
+	}
+
+	if cl.WhatsApp != nil && cfg.WhatsAppVerifyToken != "" && router != nil {
 		c.WhatsApp = controller.NewWhatsAppController(router, cl.WhatsApp, cfg.WhatsAppVerifyToken, cfg.WhatsAppAppSecret)
+	}
+
+	if cl.Telegram != nil && router != nil {
+		c.Telegram = controller.NewTelegramController(router, cl.Telegram, cfg.TelegramSecretToken)
 	}
 
 	return c

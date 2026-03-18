@@ -28,10 +28,13 @@ func registerRoutes(router boot.GinRouter, c Controllers) {
 		return web.NewJSONResponse(200, map[string]string{"status": "healthy"})
 	}))
 
+	webhook := router.Group("/webhook")
 	if c.WhatsApp != nil {
-		webhook := router.Group("/webhook")
 		webhook.GET("/whatsapp", webgin.NewHandlerRaw(c.WhatsApp.VerifyWebhook))
 		webhook.POST("/whatsapp", webgin.NewHandlerJSON(c.WhatsApp.HandleWebhook))
+	}
+	if c.Telegram != nil {
+		webhook.POST("/telegram", webgin.NewHandlerJSON(c.Telegram.HandleWebhook))
 	}
 
 	api := router.Group("/api")
@@ -123,6 +126,10 @@ func registerRoutes(router boot.GinRouter, c Controllers) {
 	if c.Trigger != nil {
 		api.GET("/triggers/jobs", webgin.NewHandlerJSON(c.Trigger.ListJobs))
 		api.POST("/triggers/job/:job_id", webgin.NewHandlerJSON(c.Trigger.TriggerJob))
+	}
+
+	if c.Pairing != nil {
+		api.GET("/pairing-code", webgin.NewHandlerJSON(c.Pairing))
 	}
 
 	if c.Figma != nil {

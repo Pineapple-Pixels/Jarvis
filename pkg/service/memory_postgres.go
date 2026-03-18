@@ -3,6 +3,7 @@ package service
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"sort"
 	"time"
@@ -293,6 +294,14 @@ func (s *PGMemoryService) ListExpenses(from, to string) ([]domain.Expense, error
 		expenses = append(expenses, e)
 	}
 	return expenses, nil
+}
+
+func (s *PGMemoryService) PruneSessions(olderThanDays int) (int64, error) {
+	result, err := s.db.Exec(sqldata.PGPruneConversations, fmt.Sprintf("%d", olderThanDays))
+	if err != nil {
+		return 0, domain.Wrapf(domain.ErrStoreDelete, err)
+	}
+	return result.RowsAffected()
 }
 
 func (s *PGMemoryService) Close() error {

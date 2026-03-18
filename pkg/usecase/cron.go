@@ -243,3 +243,21 @@ func NewDailyJournalJob(ai domain.AIProvider, waNumber string, waClient *clients
 		},
 	}
 }
+
+// NewSessionPruningJob deletes conversation sessions older than SessionTTLDays.
+// Runs daily at 3am. Delivery is log-only (no notification).
+func NewSessionPruningJob(memorySvc service.MemoryService) domain.Job {
+	return domain.Job{
+		ID:       domain.JobSessionPruning,
+		Hour:     domain.SessionPruningHour,
+		Minute:   0,
+		Delivery: domain.DeliveryConfig{Mode: domain.DeliveryModeLog},
+		RunFn: func() (string, error) {
+			pruned, err := memorySvc.PruneSessions(domain.SessionTTLDays)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("pruned %d stale session(s) older than %d days", pruned, domain.SessionTTLDays), nil
+		},
+	}
+}
