@@ -247,18 +247,25 @@ func domainToClaudeMessages(messages []domain.Message) []claudeMessage {
 		if len(m.ContentBlocks) > 0 {
 			blocks := make([]claudeContentBlock, len(m.ContentBlocks))
 			for j, b := range m.ContentBlocks {
-				blocks[j] = claudeContentBlock{
-					Type:      b.Type,
-					Text:      b.Text,
-					ID:        b.ID,
-					Name:      b.Name,
-					Input:     b.Input,
-					ToolUseID: b.ID,
-					Content:   b.Text,
-				}
-				// Fix: tool_result blocks use content+tool_use_id, not text
-				if b.Type == "tool_result" {
-					blocks[j].Text = ""
+				switch b.Type {
+				case "tool_use":
+					blocks[j] = claudeContentBlock{
+						Type:  b.Type,
+						ID:    b.ID,
+						Name:  b.Name,
+						Input: b.Input,
+					}
+				case "tool_result":
+					blocks[j] = claudeContentBlock{
+						Type:      b.Type,
+						ToolUseID: b.ID,
+						Content:   b.Text,
+					}
+				default:
+					blocks[j] = claudeContentBlock{
+						Type: b.Type,
+						Text: b.Text,
+					}
 				}
 			}
 			apiMsgs[i] = claudeMessage{Role: m.Role, Content: blocks}

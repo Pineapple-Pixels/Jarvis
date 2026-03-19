@@ -91,6 +91,10 @@ func (c *GmailClient) getMessage(messageID string) (GmailEmail, error) {
 		Snippet: msg.Snippet,
 	}
 
+	if msg.Payload == nil {
+		return email, nil
+	}
+
 	for _, header := range msg.Payload.Headers {
 		switch header.Name {
 		case gmailHeaderFrom:

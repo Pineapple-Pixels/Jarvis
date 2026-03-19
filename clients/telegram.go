@@ -138,6 +138,11 @@ func (c *TelegramClient) SendChatAction(chatID, action string) error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram: action error %d: %s", resp.StatusCode, string(respBody))
+	}
+
 	return nil
 }
 
@@ -151,6 +156,11 @@ func (c *TelegramClient) DownloadMedia(fileID string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("telegram: get file: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, "", fmt.Errorf("telegram: get file error %d: %s", resp.StatusCode, string(respBody))
+	}
 
 	var result struct {
 		OK     bool `json:"ok"`

@@ -125,6 +125,11 @@ func (c *WhatsAppClient) DownloadMedia(mediaID string) ([]byte, string, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, "", fmt.Errorf("whatsapp: media info error %d: %s", resp.StatusCode, string(respBody))
+	}
+
 	var mediaInfo struct {
 		URL      string `json:"url"`
 		MimeType string `json:"mime_type"`
