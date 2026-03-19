@@ -93,6 +93,9 @@ func (r *MessageRouter) ProcessMessage(ch domain.Channel, from, messageID, text 
 	}
 
 	_ = ch.AckMessage(messageID)
+	if ti, ok := ch.(domain.TypingIndicator); ok {
+		_ = ti.SendTyping(from)
+	}
 	log.Printf("%s: from=%s msg=%q", ch.Name(), from, truncate(text, 80))
 
 	response, err := r.handleMessage(from, text, ch.Name())
@@ -149,6 +152,10 @@ func (r *MessageRouter) ProcessAudioMessage(ch domain.Channel, from, messageID, 
 	}
 
 	log.Printf("%s: transcribed: %q", ch.Name(), truncate(text, 100))
+
+	r.hooks.Emit(context.Background(), hooks.AudioTranscribed, map[string]string{
+		"channel": ch.Name(), "from": from, "text": truncate(text, 200),
+	})
 
 	// Process the transcribed text as a normal message
 	r.ProcessMessage(ch, from, messageID, text)

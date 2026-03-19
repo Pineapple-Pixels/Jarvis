@@ -154,6 +154,14 @@ func (c *WhatsAppClient) DownloadMedia(mediaID string) ([]byte, string, error) {
 	return data, mediaInfo.MimeType, nil
 }
 
+// SendTyping implements domain.TypingIndicator.
+// WhatsApp doesn't have a native typing indicator, but we can use reactions.
+func (c *WhatsAppClient) SendTyping(to string) error {
+	// WhatsApp Cloud API doesn't support typing indicators directly.
+	// This is a no-op; the MarkAsRead already signals activity.
+	return nil
+}
+
 // Name implements domain.Channel.
 func (c *WhatsAppClient) Name() string { return "whatsapp" }
 

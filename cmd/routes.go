@@ -132,6 +132,10 @@ func registerRoutes(router boot.GinRouter, c Controllers) {
 		api.GET("/pairing-code", webgin.NewHandlerJSON(c.Pairing))
 	}
 
+	if c.Usage != nil {
+		api.GET("/usage", webgin.NewHandlerJSON(c.Usage.GetUsage))
+	}
+
 	if c.Figma != nil {
 		api.GET("/figma/file/:file_key", webgin.NewHandlerJSON(c.Figma.GetFile))
 		api.GET("/figma/file/:file_key/nodes", webgin.NewHandlerJSON(c.Figma.GetNodes))

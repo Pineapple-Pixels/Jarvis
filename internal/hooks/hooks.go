@@ -10,10 +10,13 @@ import (
 const (
 	MessageReceived          = "message_received"
 	BeforeResponse           = "before_response"
+	BeforeCompaction         = "before_compaction"
 	AfterCompaction          = "after_compaction"
 	CronJobCompleted         = "cron_job_completed"
 	WhatsAppMessageProcessed = "whatsapp_message_processed" // deprecated: use MessageProcessed
 	MessageProcessed         = "message_processed"
+	AudioTranscribed         = "audio_transcribed"
+	AgentDelegated           = "agent_delegated"
 )
 
 type Event struct {

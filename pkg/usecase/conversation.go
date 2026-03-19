@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 
@@ -90,6 +91,12 @@ func (uc *ConversationUseCase) Compact(sessionID string) error {
 	if len(msgs) < domain.MinMessagesToCompact {
 		return nil
 	}
+
+	// Emit before compaction so hooks can save important data.
+	uc.hooks.Emit(context.Background(), hooks.BeforeCompaction, map[string]string{
+		"session_id":    sessionID,
+		"message_count": fmt.Sprintf("%d", len(msgs)),
+	})
 
 	summary, err := uc.compactMultiStage(msgs)
 	if err != nil {

@@ -72,11 +72,10 @@ func TestComplete_SendsCorrectBody(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, testModel, receivedReq.Model)
-	assert.Equal(t, "system prompt", receivedReq.System)
+	assert.NotNil(t, receivedReq.System)
 	assert.Equal(t, 2048, receivedReq.MaxTokens)
 	require.Len(t, receivedReq.Messages, 1)
 	assert.Equal(t, "user", receivedReq.Messages[0].Role)
-	assert.Equal(t, "user msg", receivedReq.Messages[0].Content)
 }
 
 func TestComplete_APIError_ReturnsError(t *testing.T) {

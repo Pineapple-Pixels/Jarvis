@@ -65,12 +65,14 @@ func (c *TelegramClient) SendMessage(to, text string) error {
 	return c.SendTextMessage(to, text)
 }
 
-// AckMessage implements domain.Channel. Telegram has no read receipts,
-// so we send a "typing" action as acknowledgment.
+// AckMessage implements domain.Channel.
 func (c *TelegramClient) AckMessage(messageID string) error {
-	// messageID is not used — we don't have chatID here.
-	// AckMessage is best-effort, so we just return nil.
 	return nil
+}
+
+// SendTyping implements domain.TypingIndicator.
+func (c *TelegramClient) SendTyping(to string) error {
+	return c.SendChatAction(to, "typing")
 }
 
 // SendTextMessage sends a text message to a Telegram chat.

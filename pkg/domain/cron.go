@@ -47,6 +47,11 @@ type Channel interface {
 	AckMessage(messageID string) error
 }
 
+// TypingIndicator is optionally implemented by channels that support "typing..." status.
+type TypingIndicator interface {
+	SendTyping(to string) error
+}
+
 // MessageMeta carries metadata about an incoming message.
 type MessageMeta struct {
 	IsGroup  bool   // true if the message comes from a group chat

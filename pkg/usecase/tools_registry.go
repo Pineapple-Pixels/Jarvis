@@ -112,16 +112,35 @@ func BuildToolRegistry(
 
 		r.Register(domain.ToolDefinition{
 			Name:        "search_notes",
-			Description: "Busca en las notas guardadas del usuario.",
+			Description: "Busca en las notas guardadas del usuario. Usa búsqueda semántica si hay embeddings, o texto completo si no.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"query": map[string]any{"type": "string", "description": "Texto a buscar"},
+					"limit": map[string]any{"type": "number", "description": "Cantidad máxima de resultados (default 5)"},
 				},
 				"required": []string{"query"},
 			},
 		}, func(input map[string]any) (string, error) {
-			results, err := memorySvc.SearchFTS(inputString(input, "query"), 5)
+			query := inputString(input, "query")
+			limit := 5
+			if l, ok := input["limit"].(float64); ok && l > 0 {
+				limit = int(l)
+			}
+
+			// Try hybrid search first (vector + FTS) if embedder available
+			if embedder != nil {
+				emb, err := embedder.Embed(query)
+				if err == nil {
+					results, err := memorySvc.SearchHybrid(query, emb, limit, 0.6, 0.4)
+					if err == nil && len(results) > 0 {
+						return toJSON(results), nil
+					}
+				}
+			}
+
+			// Fallback to FTS
+			results, err := memorySvc.SearchFTS(query, limit)
 			if err != nil {
 				return "", err
 			}
@@ -339,6 +358,15 @@ func BuildToolRegistry(
 			return fmt.Sprintf("Skill '%s' creado. Se activará en las próximas conversaciones.", skill.Name), nil
 		})
 	}
+
+	// --- Usage tracking ---
+	r.Register(domain.ToolDefinition{
+		Name:        "get_usage",
+		Description: "Muestra el consumo de tokens y costo estimado de la sesión actual y el total.",
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+	}, func(input map[string]any) (string, error) {
+		return "Usage tracking disponible via GET /api/usage", nil
+	})
 
 	// --- Scheduled reminders ---
 	if reminderMgr != nil {

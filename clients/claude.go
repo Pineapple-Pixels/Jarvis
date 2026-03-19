@@ -18,6 +18,8 @@ const (
 	anthropicVersion       = "2023-06-01"
 	claudeHeaderAPIKey     = "x-api-key"
 	claudeHeaderVersion    = "anthropic-version"
+	claudeHeaderBeta       = "anthropic-beta"
+	claudePromptCacheBeta  = "prompt-caching-2024-07-31"
 )
 
 // Compile-time check: *ClaudeClient implements domain.AIProvider.
@@ -46,10 +48,20 @@ type claudeContentBlock struct {
 	IsError   bool           `json:"is_error,omitempty"`
 }
 
+type claudeSystemBlock struct {
+	Type         string         `json:"type"`
+	Text         string         `json:"text"`
+	CacheControl *cacheControl  `json:"cache_control,omitempty"`
+}
+
+type cacheControl struct {
+	Type string `json:"type"`
+}
+
 type claudeRequest struct {
 	Model     string                `json:"model"`
 	MaxTokens int                   `json:"max_tokens"`
-	System    string                `json:"system,omitempty"`
+	System    any                   `json:"system,omitempty"` // string or []claudeSystemBlock
 	Messages  []claudeMessage       `json:"messages"`
 	Tools     []domain.ToolDefinition `json:"tools,omitempty"`
 }
@@ -120,7 +132,7 @@ func (c *ClaudeClient) CompleteWithTools(system string, messages []domain.Messag
 	reqBody := claudeRequest{
 		Model:     c.model,
 		MaxTokens: cfg.MaxTokens,
-		System:    system,
+		System:    buildCachedSystem(system),
 		Messages:  domainToClaudeMessages(messages),
 		Tools:     tools,
 	}
@@ -153,7 +165,7 @@ func (c *ClaudeClient) completeMessagesWithUsage(system string, messages []domai
 	reqBody := claudeRequest{
 		Model:     c.model,
 		MaxTokens: cfg.MaxTokens,
-		System:    system,
+		System:    buildCachedSystem(system),
 		Messages:  domainToClaudeMessages(messages),
 	}
 
@@ -186,6 +198,7 @@ func (c *ClaudeClient) doRequest(reqBody claudeRequest) (claudeResponse, error) 
 	req.Header.Set(headerContentType, contentTypeJSON)
 	req.Header.Set(claudeHeaderAPIKey, c.apiKey)
 	req.Header.Set(claudeHeaderVersion, anthropicVersion)
+	req.Header.Set(claudeHeaderBeta, claudePromptCacheBeta)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -212,6 +225,18 @@ func (c *ClaudeClient) doRequest(reqBody claudeRequest) (claudeResponse, error) 
 	}
 
 	return result, nil
+}
+
+// buildCachedSystem creates a system prompt with cache_control for prompt caching.
+func buildCachedSystem(system string) any {
+	if system == "" {
+		return nil
+	}
+	return []claudeSystemBlock{{
+		Type:         "text",
+		Text:         system,
+		CacheControl: &cacheControl{Type: "ephemeral"},
+	}}
 }
 
 // domainToClaudeMessages converts domain messages to Claude API format.

@@ -34,6 +34,7 @@ type Controllers struct {
 	Telegram *controller.TelegramController
 	Skill    *controller.SkillController
 	Trigger  *controller.TriggerController
+	Usage    *controller.UsageController
 	Pairing  web.Handler
 }
 
@@ -94,6 +95,9 @@ func NewControllers(
 	}
 
 	c.Trigger = controller.NewTriggerController(scheduler)
+
+	usageTracker := usecase.NewUsageTracker()
+	c.Usage = controller.NewUsageController(usageTracker)
 
 	if cl.Figma != nil {
 		c.Figma = controller.NewFigmaController(cl.Figma)
