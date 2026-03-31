@@ -17,7 +17,22 @@
       "Read(//tmp/**)",
       "Bash(find /c/Users/Educabot/Desktop/Personal/asistente -name \"*test*.go\" -o -name \"*_test.go\" | xargs grep -l -i \"clickup\" 2>/dev/null)",
       "Bash(find /c/Users/Educabot/Desktop/Personal/asistente/pkg/usecase -type f -name \"*.go\" | xargs grep -l -i \"clickup\" 2>/dev/null || echo \"No clickup usecase files found\")",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(go tool:*)",
+      "Bash(ls:*)",
+      "Bash(for pkg:*)",
+      "Bash(do go:*)",
+      "Bash(go version:*)",
+      "Bash(echo $GOPATH)",
+      "Bash(echo $GOROOT)",
+      "Bash(echo $PATH)",
+      "Bash(winget install:*)",
+      "Bash(curl:*)",
+      "Bash(grep:*)",
+      "Bash(wc -l /c/Users/Educabot/Desktop/Personal/jarvis/db/migrations/sqlite/*.sql /c/Users/Educabot/Desktop/Personal/jarvis/db/migrations/postgres/*.sql)",
+      "Bash(go mod:*)",
+      "Read(//c/Program Files/Go/bin//**)",
+      "Bash(cmd.exe /C \"where go\")"
     ]
   }
 }

@@ -1,1 +1,0 @@
-DELETE FROM conversations WHERE session_id = ?

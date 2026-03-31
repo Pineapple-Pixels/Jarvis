@@ -1,12 +1,11 @@
-module asistente
+module jarvis
 
 go 1.25.0
 
 require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/lib/pq v1.11.2
-	github.com/mattn/go-sqlite3 v1.14.34
-	github.com/stretchr/testify v1.11.1
+github.com/stretchr/testify v1.11.1
 	google.golang.org/api v0.271.0
 	gopkg.in/yaml.v3 v3.0.1
 )

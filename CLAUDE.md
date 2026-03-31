@@ -10,7 +10,7 @@ Asistente Personal — microservicio Go que funciona como backend de un asistent
 
 - **Language**: Go 1.24+
 - **Framework**: Gin (via abstraccion framework-agnostic en `web/`)
-- **Database**: SQLite con WAL mode o PostgreSQL (configurable)
+- **Database**: PostgreSQL (tsvector con diccionario spanish para FTS)
 - **AI**: Claude API (Anthropic) o OpenAI para parseo de lenguaje natural y embeddings
 - **Integrations**: Google Sheets, Google Calendar, Notion, Obsidian, WhatsApp Business (direct webhook), GitHub, Jira, Spotify, Todoist, Gmail, ClickUp
 - **Deploy**: Docker multi-stage, Hetzner VPS + Coolify
@@ -19,7 +19,7 @@ Asistente Personal — microservicio Go que funciona como backend de un asistent
 
 ```bash
 make run          # go run ./cmd
-make build        # CGO_ENABLED=1 go build -o asistente ./cmd
+make build        # CGO_ENABLED=0 go build -o asistente ./cmd
 make test         # go test -race ./...
 make test-cover   # test + coverage report
 make vet          # go vet ./...
@@ -63,12 +63,10 @@ pkg/
 ├── domain/             ← Models, types, sentinel errors, constants, Validate() methods
 ├── controller/         ← HTTP handlers (decode → validate → usecase → response)
 ├── usecase/            ← Business logic (ProcessExpense, FallbackSearch, Compact, Scheduler)
-└── service/            ← Data access interfaces + implementations (SQLite, Postgres, Sheets)
+└── service/            ← Data access interfaces + implementations (Postgres, Sheets)
     └── sqldata/        ← SQL queries as embedded .sql files
-        ├── sqlite/     ← insert/, select/, delete/ con archivos .sql individuales
         ├── postgres/   ← insert/, select/, delete/ con archivos .sql individuales
-        ├── queries.go  ← Constantes SQLite via go:embed
-        └── queries_pg.go ← Constantes Postgres via go:embed
+        └── queries.go  ← Constantes Postgres via go:embed
 
 internal/
 ├── hooks/              ← Event hook system (Register/Emit)
@@ -80,7 +78,7 @@ test/
 
 web/                    ← Framework-agnostic HTTP abstractions (from template)
 boot/                   ← Server bootstrap (from template)
-db/                     ← Migrator + SQL migrations (sqlite + postgres)
+db/                     ← Migrator + SQL migrations (postgres)
 skills/                 ← Skill markdown files with YAML frontmatter
 ```
 
@@ -175,12 +173,12 @@ See `.env.example` for the full list with defaults.
 - **Packages**: lowercase, single word (`domain`, `controller`, `usecase`, `service`)
 - **Types/Structs**: PascalCase (`FinanceController`, `MemoryUseCase`, `ParsedExpense`)
 - **Functions/Methods**: PascalCase for exported, camelCase for unexported
-- **File names**: snake_case (`memory_sqlite.go`, `finance_sheets.go`)
+- **File names**: snake_case (`memory_postgres.go`, `finance_sheets.go`)
 - **Constants**: PascalCase for exported, camelCase for unexported
 - **JSON fields**: snake_case (`session_id`, `paid_by`, `amount_usd`)
 - **Sentinel errors**: `Err` prefix PascalCase (`ErrStoreOpen`, `ErrClaudeAPI`, `ErrValidation`)
 - **Client types**: Prefijo del servicio (`ClaudeClient`, `SheetsClient`, `GitHubIssue`, `CalendarEvent`)
-- **SQL constants**: PascalCase para SQLite (`SaveMemory`), prefijo `PG` para Postgres (`PGSaveMemory`)
+- **SQL constants**: PascalCase (`SaveMemory`, `LoadConversation`, etc.)
 
 ## Error Handling
 
@@ -216,7 +214,7 @@ Controllers llaman `payload.Validate()` y devuelven 400 con el error message.
 - `web/` and `boot/` are the template base — do not modify unless necessary
 - Controllers never use `*gin.Context` directly
 - All integrations are optional — nil if not configured
-- SQLite uses WAL mode; Postgres uses `tsvector` with spanish dictionary for FTS
+- PostgreSQL uses `tsvector` with spanish dictionary for FTS
 - SQL queries live in `.sql` files under `pkg/service/sqldata/`, never inline strings
 - Skills are hot-reloaded from disk on every chat request
 - `credentials.json` (Google service account) never committed to repo

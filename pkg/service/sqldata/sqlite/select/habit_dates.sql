@@ -1,1 +1,0 @@
-SELECT DISTINCT DATE(logged_at) AS d FROM habits WHERE name = ? ORDER BY d DESC

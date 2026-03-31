@@ -4,7 +4,7 @@ run:
 	go run ./cmd
 
 build:
-	CGO_ENABLED=1 go build -o asistente ./cmd
+	CGO_ENABLED=0 go build -o asistente ./cmd
 
 test:
 	go test -race ./...
@@ -17,7 +17,7 @@ vet:
 	go vet ./...
 
 docker:
-	docker compose up -d --build asistente
+	docker compose up -d --build jarvis
 
 docker-all:
 	docker compose up -d --build

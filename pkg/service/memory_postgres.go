@@ -29,7 +29,7 @@ func NewPGMemoryService(dsn string) (*PGMemoryService, error) {
 		return nil, domain.Wrapf(domain.ErrStorePing, err)
 	}
 
-	if err := appdb.RunMigrations(db, "postgres"); err != nil {
+	if err := appdb.RunMigrations(db); err != nil {
 		return nil, domain.Wrapf(domain.ErrStoreMigrate, err)
 	}
 
@@ -48,7 +48,7 @@ func (s *PGMemoryService) Save(content string, tags []string, embedding []float6
 	}
 
 	var id int64
-	if err := s.db.QueryRow(sqldata.PGSaveMemory, content, string(tagsJSON), string(embJSON)).Scan(&id); err != nil {
+	if err := s.db.QueryRow(sqldata.SaveMemory, content, string(tagsJSON), string(embJSON)).Scan(&id); err != nil {
 		return 0, domain.Wrapf(domain.ErrStoreSave, err)
 	}
 
@@ -56,7 +56,7 @@ func (s *PGMemoryService) Save(content string, tags []string, embedding []float6
 }
 
 func (s *PGMemoryService) Search(queryEmbedding []float64, limit int) ([]domain.Memory, error) {
-	rows, err := s.db.Query(sqldata.PGSelectMemories)
+	rows, err := s.db.Query(sqldata.SelectMemories)
 	if err != nil {
 		return nil, domain.Wrapf(domain.ErrStoreSearch, err)
 	}
@@ -108,7 +108,7 @@ func (s *PGMemoryService) Search(queryEmbedding []float64, limit int) ([]domain.
 }
 
 func (s *PGMemoryService) SearchFTS(query string, limit int) ([]domain.Memory, error) {
-	rows, err := s.db.Query(sqldata.PGSearchFTS, query, limit)
+	rows, err := s.db.Query(sqldata.SearchFTS, query, limit)
 	if err != nil {
 		return nil, domain.Wrapf(domain.ErrStoreFTS, err)
 	}
@@ -157,21 +157,21 @@ func (s *PGMemoryService) SearchHybrid(query string, queryEmbedding []float64, l
 }
 
 func (s *PGMemoryService) Delete(id int64) error {
-	if _, err := s.db.Exec(sqldata.PGDeleteMemory, id); err != nil {
+	if _, err := s.db.Exec(sqldata.DeleteMemory, id); err != nil {
 		return domain.Wrapf(domain.ErrStoreDelete, err)
 	}
 	return nil
 }
 
 func (s *PGMemoryService) SaveConversation(sessionID, role, content string) error {
-	if _, err := s.db.Exec(sqldata.PGSaveConversation, sessionID, role, content); err != nil {
+	if _, err := s.db.Exec(sqldata.SaveConversation, sessionID, role, content); err != nil {
 		return domain.Wrapf(domain.ErrConversationSave, err)
 	}
 	return nil
 }
 
 func (s *PGMemoryService) LoadConversation(sessionID string, limit int) ([]domain.ConversationMessage, error) {
-	rows, err := s.db.Query(sqldata.PGLoadConversation, sessionID, limit)
+	rows, err := s.db.Query(sqldata.LoadConversation, sessionID, limit)
 	if err != nil {
 		return nil, domain.Wrapf(domain.ErrConversationLoad, err)
 	}
@@ -195,7 +195,7 @@ func (s *PGMemoryService) LoadConversation(sessionID string, limit int) ([]domai
 }
 
 func (s *PGMemoryService) ClearConversation(sessionID string) error {
-	if _, err := s.db.Exec(sqldata.PGClearConversation, sessionID); err != nil {
+	if _, err := s.db.Exec(sqldata.ClearConversation, sessionID); err != nil {
 		return domain.Wrapf(domain.ErrConversationClear, err)
 	}
 	return nil
@@ -208,12 +208,12 @@ func (s *PGMemoryService) ReplaceConversation(sessionID string, msgs []domain.Co
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec(sqldata.PGClearConversation, sessionID); err != nil {
+	if _, err := tx.Exec(sqldata.ClearConversation, sessionID); err != nil {
 		return domain.Wrapf(domain.ErrConversationReplace, err)
 	}
 
 	for _, m := range msgs {
-		if _, err := tx.Exec(sqldata.PGSaveConversation, sessionID, m.Role, m.Content); err != nil {
+		if _, err := tx.Exec(sqldata.SaveConversation, sessionID, m.Role, m.Content); err != nil {
 			return domain.Wrapf(domain.ErrConversationReplace, err)
 		}
 	}
@@ -222,7 +222,7 @@ func (s *PGMemoryService) ReplaceConversation(sessionID string, msgs []domain.Co
 }
 
 func (s *PGMemoryService) LogHabit(name string) error {
-	if _, err := s.db.Exec(sqldata.PGLogHabit, name); err != nil {
+	if _, err := s.db.Exec(sqldata.LogHabit, name); err != nil {
 		return domain.Wrapf(domain.ErrHabitLog, err)
 	}
 	return nil
@@ -230,11 +230,11 @@ func (s *PGMemoryService) LogHabit(name string) error {
 
 func (s *PGMemoryService) GetHabitStreak(name string) (int, int, error) {
 	var total int
-	if err := s.db.QueryRow(sqldata.PGCountHabit, name).Scan(&total); err != nil {
+	if err := s.db.QueryRow(sqldata.CountHabit, name).Scan(&total); err != nil {
 		return 0, 0, domain.Wrapf(domain.ErrHabitQuery, err)
 	}
 
-	rows, err := s.db.Query(sqldata.PGHabitDates, name)
+	rows, err := s.db.Query(sqldata.HabitDates, name)
 	if err != nil {
 		return 0, 0, domain.Wrapf(domain.ErrHabitQuery, err)
 	}
@@ -260,7 +260,7 @@ func (s *PGMemoryService) GetHabitStreak(name string) (int, int, error) {
 }
 
 func (s *PGMemoryService) ListHabitsToday() ([]string, error) {
-	rows, err := s.db.Query(sqldata.PGHabitsToday)
+	rows, err := s.db.Query(sqldata.HabitsToday)
 	if err != nil {
 		return nil, domain.Wrapf(domain.ErrHabitQuery, err)
 	}
@@ -278,7 +278,7 @@ func (s *PGMemoryService) ListHabitsToday() ([]string, error) {
 }
 
 func (s *PGMemoryService) ListExpenses(from, to string) ([]domain.Expense, error) {
-	rows, err := s.db.Query(sqldata.PGListExpenses, from, to)
+	rows, err := s.db.Query(sqldata.ListExpenses, from, to)
 	if err != nil {
 		return nil, domain.Wrapf(domain.ErrFinanceSummary, err)
 	}
@@ -297,7 +297,7 @@ func (s *PGMemoryService) ListExpenses(from, to string) ([]domain.Expense, error
 }
 
 func (s *PGMemoryService) PruneSessions(olderThanDays int) (int64, error) {
-	result, err := s.db.Exec(sqldata.PGPruneConversations, fmt.Sprintf("%d", olderThanDays))
+	result, err := s.db.Exec(sqldata.PruneConversations, fmt.Sprintf("%d", olderThanDays))
 	if err != nil {
 		return 0, domain.Wrapf(domain.ErrStoreDelete, err)
 	}

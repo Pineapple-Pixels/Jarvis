@@ -1,1 +1,0 @@
-SELECT id, date, description, category, amount, amount_usd, paid_by FROM expenses WHERE date >= ? AND date <= ? ORDER BY date DESC

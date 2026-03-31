@@ -25,13 +25,11 @@ type Config struct {
 	WhatsAppTo         string
 	WhatsAppVerifyToken string
 	WhatsAppAppSecret  string
-	SQLiteDBPath       string
 	SkillsDir          string
 	NotionAPIKey       string
 	NotionPageID       string
 	ObsidianVaultPath  string
 	GoogleCalendarID   string
-	StorageBackend     string
 	PostgresDSN        string
 	GitHubToken        string
 	JiraBaseURL        string
@@ -69,13 +67,11 @@ func Load() Config {
 		WhatsAppTo:         os.Getenv("WHATSAPP_TO_NUMBER"),
 		WhatsAppVerifyToken: os.Getenv("WHATSAPP_VERIFY_TOKEN"),
 		WhatsAppAppSecret:  os.Getenv("WHATSAPP_APP_SECRET"),
-		SQLiteDBPath:       envOr("SQLITE_DB_PATH", "data/asistente.db"),
 		SkillsDir:          envOr("SKILLS_DIR", "skills"),
 		NotionAPIKey:       os.Getenv("NOTION_API_KEY"),
 		NotionPageID:       os.Getenv("NOTION_DEFAULT_PAGE_ID"),
 		ObsidianVaultPath:  os.Getenv("OBSIDIAN_VAULT_PATH"),
 		GoogleCalendarID:   os.Getenv("GOOGLE_CALENDAR_ID"),
-		StorageBackend:     envOr("STORAGE_BACKEND", "sqlite"),
 		PostgresDSN:        os.Getenv("POSTGRES_DSN"),
 		GitHubToken:        os.Getenv("GITHUB_TOKEN"),
 		JiraBaseURL:        os.Getenv("JIRA_BASE_URL"),

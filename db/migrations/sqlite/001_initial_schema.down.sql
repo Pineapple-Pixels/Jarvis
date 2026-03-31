@@ -1,6 +1,0 @@
-DROP TRIGGER IF EXISTS memories_au;
-DROP TRIGGER IF EXISTS memories_ad;
-DROP TRIGGER IF EXISTS memories_ai;
-DROP TABLE IF EXISTS memories_fts;
-DROP TABLE IF EXISTS conversations;
-DROP TABLE IF EXISTS memories;

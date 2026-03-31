@@ -1,1 +1,0 @@
-SELECT id, content, tags, embedding, created_at FROM memories ORDER BY created_at DESC

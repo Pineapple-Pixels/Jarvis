@@ -10,14 +10,11 @@ import (
 	"asistente/pkg/domain"
 )
 
-//go:embed migrations/sqlite/*.up.sql
-var sqliteMigrations embed.FS
-
 //go:embed migrations/postgres/*.up.sql
 var postgresMigrations embed.FS
 
-func RunMigrations(db *sql.DB, backend string) error {
-	if err := ensureMigrationsTable(db, backend); err != nil {
+func RunMigrations(db *sql.DB) error {
+	if err := ensureMigrationsTable(db); err != nil {
 		return domain.Wrapf(domain.ErrMigrateTable, err)
 	}
 
@@ -26,18 +23,8 @@ func RunMigrations(db *sql.DB, backend string) error {
 		return domain.Wrapf(domain.ErrMigrateRead, err)
 	}
 
-	var fs embed.FS
-	var dir string
-	switch backend {
-	case "postgres":
-		fs = postgresMigrations
-		dir = "migrations/postgres"
-	default:
-		fs = sqliteMigrations
-		dir = "migrations/sqlite"
-	}
-
-	entries, err := fs.ReadDir(dir)
+	dir := "migrations/postgres"
+	entries, err := postgresMigrations.ReadDir(dir)
 	if err != nil {
 		return domain.Wrapf(domain.ErrMigrateRead, err)
 	}
@@ -56,7 +43,7 @@ func RunMigrations(db *sql.DB, backend string) error {
 			continue
 		}
 
-		content, err := fs.ReadFile(dir + "/" + file)
+		content, err := postgresMigrations.ReadFile(dir + "/" + file)
 		if err != nil {
 			return domain.Wrapf(domain.ErrMigrateRead, err)
 		}
@@ -67,7 +54,7 @@ func RunMigrations(db *sql.DB, backend string) error {
 			return domain.Wrap(domain.ErrMigrateApply, file+": "+err.Error())
 		}
 
-		if err := recordMigration(db, version, backend); err != nil {
+		if err := recordMigration(db, version); err != nil {
 			return domain.Wrapf(domain.ErrMigrateRecord, err)
 		}
 	}
@@ -75,20 +62,11 @@ func RunMigrations(db *sql.DB, backend string) error {
 	return nil
 }
 
-func ensureMigrationsTable(d *sql.DB, backend string) error {
-	var stmt string
-	switch backend {
-	case "postgres":
-		stmt = `CREATE TABLE IF NOT EXISTS schema_migrations (
-			version TEXT PRIMARY KEY,
-			applied_at TIMESTAMPTZ DEFAULT NOW()
-		)`
-	default:
-		stmt = `CREATE TABLE IF NOT EXISTS schema_migrations (
-			version TEXT PRIMARY KEY,
-			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`
-	}
+func ensureMigrationsTable(d *sql.DB) error {
+	stmt := `CREATE TABLE IF NOT EXISTS schema_migrations (
+		version TEXT PRIMARY KEY,
+		applied_at TIMESTAMPTZ DEFAULT NOW()
+	)`
 	_, err := d.Exec(stmt)
 	return err
 }
@@ -111,13 +89,7 @@ func getAppliedMigrations(db *sql.DB) (map[string]bool, error) {
 	return applied, nil
 }
 
-func recordMigration(d *sql.DB, version, backend string) error {
-	switch backend {
-	case "postgres":
-		_, err := d.Exec("INSERT INTO schema_migrations (version) VALUES ($1)", version)
-		return err
-	default:
-		_, err := d.Exec("INSERT INTO schema_migrations (version) VALUES (?)", version)
-		return err
-	}
+func recordMigration(d *sql.DB, version string) error {
+	_, err := d.Exec("INSERT INTO schema_migrations (version) VALUES ($1)", version)
+	return err
 }

@@ -39,7 +39,7 @@ func (e *AIEmbedder) Embed(text string) ([]float64, error) {
 }
 
 // MemoryService defines the contract for memory and conversation storage.
-// Implementations: SQLiteMemoryService, PGMemoryService.
+// Implementations: PGMemoryService.
 type MemoryService interface {
 	Save(content string, tags []string, embedding []float64) (int64, error)
 	Search(queryEmbedding []float64, limit int) ([]domain.Memory, error)

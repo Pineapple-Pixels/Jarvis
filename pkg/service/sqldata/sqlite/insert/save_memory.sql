@@ -1,1 +1,0 @@
-INSERT INTO memories (content, tags, embedding) VALUES (?, ?, ?)

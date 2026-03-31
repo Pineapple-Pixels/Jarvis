@@ -1,1 +1,0 @@
-INSERT INTO conversations (session_id, role, content) VALUES (?, ?, ?)
