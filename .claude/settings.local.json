@@ -31,7 +31,9 @@
       "Read(//c/Program Files/Go/bin//**)",
       "Bash(cmd.exe /C \"where go\")",
       "Bash(git remote:*)",
-      "Bash(xargs sed:*)"
+      "Bash(xargs sed:*)",
+      "Bash(find /c/Users/Educabot/Desktop/Personal/jarvis -type f -name \"*.go\" -exec grep -l \"db.Query\\\\|db.Exec\\\\|QueryRow\" {})",
+      "Bash(find /c/Users/Educabot/Desktop/Personal/jarvis -type f -name *.sql)"
     ]
   }
 }
