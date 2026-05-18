@@ -6,6 +6,8 @@ import (
 
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
+
+	"jarvis/pkg/domain"
 )
 
 const (
@@ -16,15 +18,6 @@ const (
 	gmailHeaderSubject = "Subject"
 	gmailHeaderDate    = "Date"
 )
-
-// GmailEmail represents a Gmail email message.
-type GmailEmail struct {
-	ID      string `json:"id"`
-	From    string `json:"from"`
-	Subject string `json:"subject"`
-	Snippet string `json:"snippet"`
-	Date    string `json:"date"`
-}
 
 // GmailClient is the Gmail API client.
 type GmailClient struct {
@@ -47,7 +40,7 @@ func NewGmailClient(credentialsFile, userEmail string) (*GmailClient, error) {
 }
 
 // ListUnread returns unread emails up to maxResults.
-func (c *GmailClient) ListUnread(maxResults int) ([]GmailEmail, error) {
+func (c *GmailClient) ListUnread(maxResults int) ([]domain.GmailEmail, error) {
 	if maxResults <= 0 {
 		maxResults = 10
 	}
@@ -60,7 +53,7 @@ func (c *GmailClient) ListUnread(maxResults int) ([]GmailEmail, error) {
 		return nil, fmt.Errorf("gmail: list messages: %w", err)
 	}
 
-	emails := make([]GmailEmail, 0, len(msgs.Messages))
+	emails := make([]domain.GmailEmail, 0, len(msgs.Messages))
 	for _, m := range msgs.Messages {
 		email, err := c.getMessage(m.Id)
 		if err != nil {
@@ -73,20 +66,20 @@ func (c *GmailClient) ListUnread(maxResults int) ([]GmailEmail, error) {
 }
 
 // GetMessage returns a single email by ID.
-func (c *GmailClient) GetMessage(messageID string) (GmailEmail, error) {
+func (c *GmailClient) GetMessage(messageID string) (domain.GmailEmail, error) {
 	return c.getMessage(messageID)
 }
 
-func (c *GmailClient) getMessage(messageID string) (GmailEmail, error) {
+func (c *GmailClient) getMessage(messageID string) (domain.GmailEmail, error) {
 	msg, err := c.service.Users.Messages.Get(c.userEmail, messageID).
 		Format("metadata").
 		MetadataHeaders(gmailHeaderFrom, gmailHeaderSubject, gmailHeaderDate).
 		Do()
 	if err != nil {
-		return GmailEmail{}, fmt.Errorf("gmail: get message: %w", err)
+		return domain.GmailEmail{}, fmt.Errorf("gmail: get message: %w", err)
 	}
 
-	email := GmailEmail{
+	email := domain.GmailEmail{
 		ID:      msg.Id,
 		Snippet: msg.Snippet,
 	}

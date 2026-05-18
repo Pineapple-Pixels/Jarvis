@@ -8,11 +8,11 @@ import (
 )
 
 type MemoryUseCase struct {
-	repo     service.MemoryService
+	repo     service.MemoryStore
 	embedder service.Embedder
 }
 
-func NewMemoryUseCase(repo service.MemoryService, embedder service.Embedder) *MemoryUseCase {
+func NewMemoryUseCase(repo service.MemoryStore, embedder service.Embedder) *MemoryUseCase {
 	return &MemoryUseCase{repo: repo, embedder: embedder}
 }
 

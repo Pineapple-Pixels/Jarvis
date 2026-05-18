@@ -6,10 +6,10 @@ import (
 )
 
 type HabitUseCase struct {
-	repo service.MemoryService
+	repo service.HabitStore
 }
 
-func NewHabitUseCase(repo service.MemoryService) *HabitUseCase {
+func NewHabitUseCase(repo service.HabitStore) *HabitUseCase {
 	return &HabitUseCase{repo: repo}
 }
 

@@ -54,6 +54,7 @@ func NewMessageRouter(
 ) *MessageRouter {
 	code := generatePairingCode()
 	if allowedFrom == "" {
+		// No ctx available at construction time — using log.Printf intentionally.
 		log.Printf("message-router: pairing code for new senders: %s", code)
 	}
 
@@ -146,12 +147,16 @@ func (r *MessageRouter) ProcessAudioMessage(ch domain.Channel, from, messageID, 
 		return
 	}
 
+	ctx := tracing.WithTraceID(context.Background(), tracing.NewTraceID())
+	ctx = tracing.WithChannel(ctx, ch.Name())
+	slog := tracing.Logger(ctx)
+
 	_ = ch.AckMessage(messageID)
 
 	// Download audio
 	downloader, ok := ch.(domain.MediaDownloader)
 	if !ok {
-		log.Printf("%s: channel does not support media download", ch.Name())
+		slog.Error("channel does not support media download")
 		_ = ch.SendMessage(from, "No puedo procesar audios desde este canal.")
 		return
 	}
@@ -163,23 +168,23 @@ func (r *MessageRouter) ProcessAudioMessage(ch domain.Channel, from, messageID, 
 
 	audioData, mimeType, err := downloader.DownloadMedia(mediaID)
 	if err != nil {
-		log.Printf("%s: failed to download audio: %v", ch.Name(), err)
+		slog.Error("failed to download audio", "err", err)
 		_ = ch.SendMessage(from, "No pude descargar el audio.")
 		return
 	}
 
-	log.Printf("%s: transcribing audio from %s (%d bytes, %s)", ch.Name(), from, len(audioData), mimeType)
+	slog.Info("transcribing audio", "from", from, "bytes", len(audioData), "mime", mimeType)
 
 	text, err := r.transcriber.Transcribe(audioData, mimeType)
 	if err != nil {
-		log.Printf("%s: transcription failed: %v", ch.Name(), err)
+		slog.Error("transcription failed", "err", err)
 		_ = ch.SendMessage(from, "No pude transcribir el audio.")
 		return
 	}
 
-	log.Printf("%s: transcribed: %q", ch.Name(), truncate(text, 100))
+	slog.Info("audio transcribed", "text", truncate(text, 100))
 
-	r.hooks.Emit(context.Background(), hooks.AudioTranscribed, map[string]string{
+	r.hooks.Emit(ctx, hooks.AudioTranscribed, map[string]string{
 		"channel": ch.Name(), "from": from, "text": truncate(text, 200),
 	})
 
@@ -194,6 +199,10 @@ func (r *MessageRouter) ProcessImageMessage(ch domain.Channel, from, messageID, 
 		return
 	}
 
+	ctx := tracing.WithTraceID(context.Background(), tracing.NewTraceID())
+	ctx = tracing.WithChannel(ctx, ch.Name())
+	slog := tracing.Logger(ctx)
+
 	_ = ch.AckMessage(messageID)
 
 	downloader, ok := ch.(domain.MediaDownloader)
@@ -204,12 +213,12 @@ func (r *MessageRouter) ProcessImageMessage(ch domain.Channel, from, messageID, 
 
 	imgData, mimeType, err := downloader.DownloadMedia(mediaID)
 	if err != nil {
-		log.Printf("%s: failed to download image: %v", ch.Name(), err)
+		slog.Error("failed to download image", "err", err)
 		_ = ch.SendMessage(from, "No pude descargar la imagen.")
 		return
 	}
 
-	log.Printf("%s: processing image from %s (%d bytes, %s)", ch.Name(), from, len(imgData), mimeType)
+	slog.Info("processing image", "from", from, "bytes", len(imgData), "mime", mimeType)
 
 	// Build a message with image as base64 for Claude vision
 	b64 := base64.StdEncoding.EncodeToString(imgData)
@@ -220,16 +229,14 @@ func (r *MessageRouter) ProcessImageMessage(ch domain.Channel, from, messageID, 
 
 	text := "[Imagen adjunta: data:" + mimeType + ";base64," + truncate(b64, 100) + "...]\n" + prompt
 
-	ctx := tracing.WithTraceID(context.Background(), tracing.NewTraceID())
-	ctx = tracing.WithChannel(ctx, ch.Name())
 	response, err := r.handleMessage(ctx, from, text, ch.Name())
 	if err != nil {
-		log.Printf("%s: error processing image: %v", ch.Name(), err)
+		slog.Error("error processing image", "err", err)
 		response = "No pude procesar la imagen."
 	}
 
 	if err := ch.SendMessage(from, response); err != nil {
-		log.Printf("%s: failed to send reply: %v", ch.Name(), err)
+		slog.Error("failed to send reply", "from", from, "err", err)
 	}
 }
 
@@ -265,7 +272,9 @@ func (r *MessageRouter) handleMessage(ctx context.Context, from, text, channelNa
 		return "", err
 	}
 
-	_ = r.conversation.Ingest(sessionID, domain.RoleAssistant, response)
+	if err := r.conversation.Ingest(sessionID, domain.RoleAssistant, response); err != nil {
+		tracing.Logger(ctx).Error("failed to ingest response", "error", err)
+	}
 
 	if r.usage != nil {
 		inputToks := len(systemPrompt)/4 + len(text)/4
@@ -274,6 +283,63 @@ func (r *MessageRouter) handleMessage(ctx context.Context, from, text, channelNa
 	}
 
 	return response, nil
+}
+
+// filterSkills applies profile and dependency filters to the given skill list.
+// Skills filtered out by dependency that have a FallbackAction are written to sb.
+func (r *MessageRouter) filterSkills(relevant []skills.Skill, sb *strings.Builder) []skills.Skill {
+	if r.profile != nil {
+		var filtered []skills.Skill
+		for _, s := range relevant {
+			for _, tag := range s.Tags {
+				if r.profile.AllowsSkillTag(tag) {
+					filtered = append(filtered, s)
+					break
+				}
+			}
+		}
+		relevant = filtered
+	}
+
+	if r.depChecker != nil {
+		var available []skills.Skill
+		for _, s := range relevant {
+			if len(s.DependsOn) == 0 || r.depChecker.AllAvailable(s.DependsOn) {
+				available = append(available, s)
+			} else if s.FallbackAction != "" {
+				sb.WriteString("[Nota: " + s.Name + " no disponible. Alternativa: " + s.FallbackAction + "]\n")
+			}
+		}
+		relevant = available
+	}
+
+	return relevant
+}
+
+// matchRules loads all rules, filters by message tags and time context, then applies profile filtering.
+func (r *MessageRouter) matchRules(tags []string, now time.Time, channelName string) []rules.Rule {
+	if r.rules == nil {
+		return nil
+	}
+
+	allRules, err := r.rules.LoadAll()
+	if err != nil || len(allRules) == 0 {
+		return nil
+	}
+
+	matched := rules.MatchRules(allRules, tags, now, channelName)
+
+	if r.profile != nil {
+		var filtered []rules.Rule
+		for _, rule := range matched {
+			if r.profile.AllowsRule(rule.Name) {
+				filtered = append(filtered, rule)
+			}
+		}
+		matched = filtered
+	}
+
+	return matched
 }
 
 func (r *MessageRouter) buildSystemPrompt(message, channelName string) string {
@@ -314,48 +380,27 @@ func (r *MessageRouter) buildSystemPrompt(message, channelName string) string {
 
 	if r.skills == nil {
 		prompt := sb.String()
-		if r.promptCache != nil { r.promptCache.Set(cacheKey, prompt) }
+		if r.promptCache != nil {
+			r.promptCache.Set(cacheKey, prompt)
+		}
 		return prompt
 	}
 
 	loaded, err := r.skills.LoadEnabled()
 	if err != nil || len(loaded) == 0 {
 		prompt := sb.String()
-		if r.promptCache != nil { r.promptCache.Set(cacheKey, prompt) }
+		if r.promptCache != nil {
+			r.promptCache.Set(cacheKey, prompt)
+		}
 		return prompt
 	}
 
-	var relevant []skills.Skill
-	if len(tags) == 0 {
-		relevant = loaded
-	} else {
+	relevant := loaded
+	if len(tags) > 0 {
 		relevant = skills.FilterByTags(loaded, tags...)
 	}
 
-	if r.profile != nil {
-		var filtered []skills.Skill
-		for _, s := range relevant {
-			for _, tag := range s.Tags {
-				if r.profile.AllowsSkillTag(tag) {
-					filtered = append(filtered, s)
-					break
-				}
-			}
-		}
-		relevant = filtered
-	}
-
-	if r.depChecker != nil {
-		var available []skills.Skill
-		for _, s := range relevant {
-			if len(s.DependsOn) == 0 || r.depChecker.AllAvailable(s.DependsOn) {
-				available = append(available, s)
-			} else if s.FallbackAction != "" {
-				sb.WriteString("[Nota: " + s.Name + " no disponible. Alternativa: " + s.FallbackAction + "]\n")
-			}
-		}
-		relevant = available
-	}
+	relevant = r.filterSkills(relevant, &sb)
 
 	sb.WriteString(domain.SkillsSectionHeader)
 	sb.WriteString(skills.FormatForPrompt(relevant))
@@ -364,25 +409,12 @@ func (r *MessageRouter) buildSystemPrompt(message, channelName string) string {
 		sb.WriteString("\n" + r.profile.ExtraPrompt + "\n\n")
 	}
 
-	if r.rules != nil {
-		allRules, err := r.rules.LoadAll()
-		if err == nil && len(allRules) > 0 {
-			matched := rules.MatchRules(allRules, tags, now, channelName)
-			if r.profile != nil {
-				var filteredRules []rules.Rule
-				for _, rule := range matched {
-					if r.profile.AllowsRule(rule.Name) {
-						filteredRules = append(filteredRules, rule)
-					}
-				}
-				matched = filteredRules
-			}
-			sb.WriteString(rules.FormatForPrompt(matched))
-		}
-	}
+	sb.WriteString(rules.FormatForPrompt(r.matchRules(tags, now, channelName)))
 
 	prompt := sb.String()
-	if r.promptCache != nil { r.promptCache.Set(cacheKey, prompt) }
+	if r.promptCache != nil {
+		r.promptCache.Set(cacheKey, prompt)
+	}
 	return prompt
 }
 
@@ -403,11 +435,13 @@ func (r *MessageRouter) handleUnauthorized(ch domain.Channel, from, messageID, t
 	if trimmed == r.pairingCode {
 		r.pairedSenders[from] = true
 		r.pairingCode = generatePairingCode()
+		// No ctx available in this path — using log.Printf intentionally.
 		log.Printf("%s: sender %s paired successfully, new code: %s", ch.Name(), from, r.pairingCode)
 		_ = ch.SendMessage(from, "Paired! Ya estás autorizado para hablarme.")
 		return
 	}
 
+	// No ctx available in this path — using log.Printf intentionally.
 	log.Printf("%s: unauthorized sender %s (send pairing code to connect)", ch.Name(), from)
 	_ = ch.SendMessage(from, "No te conozco. Enviame el código de vinculación para conectarte.")
 }

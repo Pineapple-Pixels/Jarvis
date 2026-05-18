@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"jarvis/pkg/domain"
 )
 
 const (
@@ -14,16 +16,6 @@ const (
 	todoistDefaultTimeout = 15 * time.Second
 	todoistPathTasks      = "/rest/v2/tasks"
 )
-
-// TodoistTask represents a Todoist task.
-type TodoistTask struct {
-	ID        string `json:"id"`
-	Content   string `json:"content"`
-	DueDate   string `json:"due_date,omitempty"`
-	Priority  int    `json:"priority"`
-	Completed bool   `json:"is_completed"`
-	URL       string `json:"url"`
-}
 
 // TodoistClient is the Todoist API client.
 type TodoistClient struct {
@@ -49,7 +41,7 @@ func NewTodoistClientWithBaseURL(apiToken, baseURL string) *TodoistClient {
 }
 
 // GetTasks returns all active tasks.
-func (c *TodoistClient) GetTasks() ([]TodoistTask, error) {
+func (c *TodoistClient) GetTasks() ([]domain.TodoistTask, error) {
 	resp, err := c.doRequest(http.MethodGet, todoistPathTasks, nil)
 	if err != nil {
 		return nil, err
@@ -70,9 +62,9 @@ func (c *TodoistClient) GetTasks() ([]TodoistTask, error) {
 		return nil, fmt.Errorf("todoist: parse tasks: %w", err)
 	}
 
-	tasks := make([]TodoistTask, len(rawTasks))
+	tasks := make([]domain.TodoistTask, len(rawTasks))
 	for i, raw := range rawTasks {
-		tasks[i] = TodoistTask{
+		tasks[i] = domain.TodoistTask{
 			ID:        raw.ID,
 			Content:   raw.Content,
 			Priority:  raw.Priority,
@@ -88,7 +80,7 @@ func (c *TodoistClient) GetTasks() ([]TodoistTask, error) {
 }
 
 // CreateTask creates a new task.
-func (c *TodoistClient) CreateTask(content string, dueDate *string) (TodoistTask, error) {
+func (c *TodoistClient) CreateTask(content string, dueDate *string) (domain.TodoistTask, error) {
 	body := map[string]any{
 		"content": content,
 	}
@@ -98,7 +90,7 @@ func (c *TodoistClient) CreateTask(content string, dueDate *string) (TodoistTask
 
 	resp, err := c.doRequest(http.MethodPost, todoistPathTasks, body)
 	if err != nil {
-		return TodoistTask{}, err
+		return domain.TodoistTask{}, err
 	}
 
 	var raw struct {
@@ -113,10 +105,10 @@ func (c *TodoistClient) CreateTask(content string, dueDate *string) (TodoistTask
 	}
 
 	if err := json.Unmarshal(resp, &raw); err != nil {
-		return TodoistTask{}, fmt.Errorf("todoist: parse create response: %w", err)
+		return domain.TodoistTask{}, fmt.Errorf("todoist: parse create response: %w", err)
 	}
 
-	task := TodoistTask{
+	task := domain.TodoistTask{
 		ID:        raw.ID,
 		Content:   raw.Content,
 		Priority:  raw.Priority,

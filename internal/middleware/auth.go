@@ -7,10 +7,17 @@ import (
 )
 
 // WebhookAuth validates the X-Webhook-Secret header against the expected secret.
-func WebhookAuth(secret string) web.Interceptor {
+// If secret is empty and allowInsecure is false, all requests are rejected with 401.
+// Set ALLOW_INSECURE=true to bypass authentication in local development.
+func WebhookAuth(secret string, allowInsecure bool) web.Interceptor {
 	return func(req web.InterceptedRequest) web.Response {
 		if secret == "" {
-			return req.Next()
+			if allowInsecure {
+				return req.Next()
+			}
+			return web.NewJSONResponse(http.StatusUnauthorized, map[string]string{
+				"error": "unauthorized: WEBHOOK_SECRET is not set; set ALLOW_INSECURE=true to bypass in local dev",
+			})
 		}
 
 		headers, ok := req.Header("X-Webhook-Secret")

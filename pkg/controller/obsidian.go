@@ -56,6 +56,12 @@ func (c *ObsidianController) WriteNote(req web.Request) web.Response {
 func (c *ObsidianController) ListNotes(req web.Request) web.Response {
 	dir, _ := req.Query(domain.QueryParamDir)
 
+	if dir != "" {
+		if err := domain.ValidatePath(dir); err != nil {
+			return web.NewJSONResponse(http.StatusBadRequest, domain.ObsidianListResponse{Error: err.Error()})
+		}
+	}
+
 	notes, err := c.vault.ListNotes(dir)
 	if err != nil {
 		return web.NewJSONResponse(http.StatusInternalServerError, domain.ObsidianListResponse{Error: err.Error()})

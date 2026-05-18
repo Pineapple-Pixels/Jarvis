@@ -7,19 +7,13 @@ import (
 
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
+
+	"jarvis/pkg/domain"
 )
 
 type CalendarClient struct {
 	service    *calendar.Service
 	calendarID string
-}
-
-type CalendarEvent struct {
-	ID       string    `json:"id"`
-	Summary  string    `json:"summary"`
-	Start    time.Time `json:"start"`
-	End      time.Time `json:"end"`
-	Location string    `json:"location,omitempty"`
 }
 
 func NewCalendarClient(credentialsFile, calendarID string) (*CalendarClient, error) {
@@ -35,7 +29,7 @@ func NewCalendarClient(credentialsFile, calendarID string) (*CalendarClient, err
 	}, nil
 }
 
-func (c *CalendarClient) GetTodayEvents() ([]CalendarEvent, error) {
+func (c *CalendarClient) GetTodayEvents() ([]domain.CalendarEvent, error) {
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
@@ -43,7 +37,7 @@ func (c *CalendarClient) GetTodayEvents() ([]CalendarEvent, error) {
 	return c.ListEvents(startOfDay, endOfDay)
 }
 
-func (c *CalendarClient) ListEvents(timeMin, timeMax time.Time) ([]CalendarEvent, error) {
+func (c *CalendarClient) ListEvents(timeMin, timeMax time.Time) ([]domain.CalendarEvent, error) {
 	events, err := c.service.Events.List(c.calendarID).
 		TimeMin(timeMin.Format(time.RFC3339)).
 		TimeMax(timeMax.Format(time.RFC3339)).
@@ -54,9 +48,9 @@ func (c *CalendarClient) ListEvents(timeMin, timeMax time.Time) ([]CalendarEvent
 		return nil, fmt.Errorf("calendar: list events: %w", err)
 	}
 
-	result := make([]CalendarEvent, 0, len(events.Items))
+	result := make([]domain.CalendarEvent, 0, len(events.Items))
 	for _, item := range events.Items {
-		e := CalendarEvent{
+		e := domain.CalendarEvent{
 			ID:       item.Id,
 			Summary:  item.Summary,
 			Location: item.Location,

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"crypto/hmac"
 	"fmt"
 	"log"
 	"net/http"
@@ -33,7 +34,7 @@ func NewTelegramController(router *usecase.MessageRouter, channel domain.Channel
 func (c *TelegramController) HandleWebhook(req web.Request) web.Response {
 	if c.secretToken != "" {
 		token := req.Raw().Header.Get("X-Telegram-Bot-Api-Secret-Token")
-		if token != c.secretToken {
+		if !hmac.Equal([]byte(token), []byte(c.secretToken)) {
 			return web.NewJSONResponse(http.StatusForbidden, map[string]string{"error": "invalid secret token"})
 		}
 	}

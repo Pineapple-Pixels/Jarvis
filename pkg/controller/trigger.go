@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"slices"
 
 	"jarvis/pkg/usecase"
 	"jarvis/web"
@@ -23,6 +24,12 @@ func (c *TriggerController) TriggerJob(req web.Request) web.Response {
 	if !ok || jobID == "" {
 		return web.NewJSONResponse(http.StatusBadRequest, map[string]any{
 			"success": false, "error": "job_id is required",
+		})
+	}
+
+	if !slices.Contains(c.scheduler.ListJobs(), jobID) {
+		return web.NewJSONResponse(http.StatusNotFound, map[string]any{
+			"success": false, "error": "job not found: " + jobID,
 		})
 	}
 

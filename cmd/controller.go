@@ -44,8 +44,147 @@ type Controllers struct {
 	SkillsQA *controller.SkillsQAController
 	Health   *controller.HealthController
 	Pairing  web.Handler
+
+	healthChecker *usecase.HealthChecker
 }
 
+// Close stops background goroutines owned by the Controllers layer.
+func (c *Controllers) Close() {
+	if c.healthChecker != nil {
+		c.healthChecker.Stop()
+	}
+}
+
+// buildAvailableIntegrations returns a single map of integration availability
+// derived from nil-checks on the Clients struct. This map is the single source
+// of truth consumed by ToolRegistry, DependencyChecker, and HealthChecker,
+// eliminating the previous three separate nil-check blocks (Issue A3).
+func buildAvailableIntegrations(cl Clients) map[string]bool {
+	return map[string]bool{
+		"calendar": cl.Calendar != nil,
+		"sheets":   cl.Sheets != nil,
+		"github":   cl.GitHub != nil,
+		"jira":     cl.Jira != nil,
+		"spotify":  cl.Spotify != nil,
+		"todoist":  cl.Todoist != nil,
+		"gmail":    cl.Gmail != nil,
+		"notion":   cl.Notion != nil,
+		"obsidian": cl.Obsidian != nil,
+		"clickup":  cl.ClickUp != nil,
+		"figma":    cl.Figma != nil,
+		"whatsapp": cl.WhatsApp != nil,
+		"telegram": cl.Telegram != nil,
+	}
+}
+
+// buildHealthChecker constructs a HealthChecker from the available integrations
+// map and starts the periodic check loop (Issue A1).
+func buildHealthChecker(available map[string]bool, catalogSvc service.CatalogService) *usecase.HealthChecker {
+	var checks []usecase.IntegrationCheck
+	// Only integrations surfaced in health (excludes sheets — internal-only).
+	healthIntegrations := []string{
+		"calendar", "github", "jira", "spotify", "todoist",
+		"gmail", "notion", "obsidian", "clickup", "figma",
+		"whatsapp", "telegram",
+	}
+	for _, name := range healthIntegrations {
+		if available[name] {
+			name := name
+			checks = append(checks, usecase.IntegrationCheck{
+				Name:  name,
+				Check: func() error { return nil },
+			})
+		}
+	}
+	checker := usecase.NewHealthChecker(checks, catalogSvc)
+	checker.Start(5 * time.Minute)
+	return checker
+}
+
+// buildMessageRouter assembles the ToolRegistry, AgentOrchestrator, and
+// MessageRouter. Returns nil when neither WhatsApp nor Telegram is configured
+// (Issue A1).
+func buildMessageRouter(
+	cfg config.Config,
+	cl Clients,
+	available map[string]bool,
+	financeUC *usecase.FinanceUseCase,
+	memorySvc service.MemoryService,
+	embedder service.Embedder,
+	chatUC *usecase.ConversationUseCase,
+	catalogSvc service.CatalogService,
+	skillsLoader skills.SkillProvider,
+	hooksRegistry *hooks.Registry,
+	usageTracker *usecase.UsageTracker,
+) *usecase.MessageRouter {
+	if cl.WhatsApp == nil && cl.Telegram == nil {
+		return nil
+	}
+
+	// Reminder manager sends reminders via the first available channel.
+	var reminderMgr *usecase.ReminderManager
+	if cl.WhatsApp != nil && cfg.WhatsApp.To != "" {
+		reminderMgr = usecase.NewReminderManager(func(text string) {
+			_ = cl.WhatsApp.SendTextMessage(cfg.WhatsApp.To, text)
+		})
+	}
+
+	var sw skills.SkillWriter
+	if writer, ok := skillsLoader.(skills.SkillWriter); ok {
+		sw = writer
+	}
+
+	toolReg := usecase.BuildToolRegistry(
+		financeUC, memorySvc, embedder,
+		cl.Calendar, cl.Gmail, cl.Todoist, cl.GitHub, cl.Jira,
+		cl.Spotify, cl.Notion, cl.Obsidian, sw, reminderMgr,
+	)
+	toolReg.SetCatalog(catalogSvc)
+	toolReg.SetHooks(hooksRegistry)
+	if cfg.Runtime.DryRunTools != "" {
+		toolReg.SetDryRunTools(strings.Split(cfg.Runtime.DryRunTools, ","))
+	}
+
+	var agent *usecase.AgentUseCase
+	var orchestrator *usecase.AgentOrchestrator
+	if tp, ok := cl.AI.(domain.ToolUseProvider); ok {
+		agent = usecase.NewAgentUseCase(tp, toolReg)
+		if loaded, err := skillsLoader.LoadEnabled(); err == nil {
+			agent.SetSkills(loaded)
+		}
+		agentDefs := usecase.DefaultAgents()
+		agentsLoader := agents.NewLoader(cfg.Runtime.AgentsDir)
+		if loaded, err := agentsLoader.LoadAll(); err == nil && len(loaded) > 0 {
+			agentDefs = loaded
+		}
+		orchestrator = usecase.NewAgentOrchestrator(tp, toolReg, agentDefs)
+	}
+
+	var transcriber domain.Transcriber
+	if cl.Transcriber != nil {
+		transcriber = cl.Transcriber
+	}
+
+	rulesLoader := rules.NewLoader(cfg.Runtime.RulesDir)
+	router := usecase.NewMessageRouter(
+		chatUC, cl.AI, agent, orchestrator, transcriber,
+		skillsLoader, rulesLoader, hooksRegistry, usageTracker, cfg.WhatsApp.To,
+	)
+
+	profileLoader := profiles.NewLoader(cfg.Runtime.ProfilesDir)
+	if profile, err := profileLoader.Load(cfg.Runtime.DefaultProfile); err == nil {
+		router.SetProfile(profile)
+	}
+
+	// Re-use the availability map — no redundant nil-checks here.
+	router.SetDependencyChecker(skills.NewDependencyChecker(available))
+
+	return router
+}
+
+// NewControllers is a thin orchestrator: it wires use-cases, calls the two
+// helper builders, and populates the Controllers struct (Issue A1).
+// catalogSvc is injected rather than derived via type assertion (Issue C3).
 func NewControllers(
 	cl Clients,
 	cfg config.Config,
@@ -55,11 +194,17 @@ func NewControllers(
 	skillsLoader skills.SkillProvider,
 	hooksRegistry *hooks.Registry,
 	scheduler *usecase.Scheduler,
+	catalogSvc service.CatalogService,
 ) Controllers {
 	financeUC := usecase.NewFinanceUseCase(cl.AI, financeSvc)
 	financeUC.SetMemoryService(memorySvc)
 
-	chatUC := usecase.NewConversationUseCase(memorySvc, cl.AI, hooksRegistry, cfg.MaxHistoryMsgs, cfg.CompactThreshold)
+	chatUC := usecase.NewConversationUseCase(memorySvc, cl.AI, hooksRegistry, cfg.AI.MaxHistoryMsgs, cfg.AI.CompactThreshold)
+
+	usageTracker := usecase.NewUsageTracker()
+
+	// Single source of truth for integration availability (Issue A3).
+	available := buildAvailableIntegrations(cl)
 
 	c := Controllers{
 		Finance: controller.NewFinanceController(financeUC),
@@ -68,18 +213,21 @@ func NewControllers(
 		Habit:   controller.NewHabitController(usecase.NewHabitUseCase(memorySvc)),
 		Link:    controller.NewLinkController(usecase.NewLinkUseCase(memorySvc, embedder)),
 		Project: controller.NewProjectController(usecase.NewProjectUseCase(memorySvc, embedder, cl.AI)),
+		Trigger: controller.NewTriggerController(scheduler),
+		Usage:   controller.NewUsageController(usageTracker),
+		Catalog: controller.NewCatalogController(catalogSvc),
 	}
 
 	if cl.Notion != nil {
-		c.Notion = controller.NewNotionController(cl.Notion, cfg.NotionPageID)
+		c.Notion = controller.NewNotionController(cl.Notion, cfg.Integrations.NotionPageID)
 	}
 	if cl.Obsidian != nil {
 		c.Obsidian = controller.NewObsidianController(cl.Obsidian)
 	}
-	if cl.Calendar != nil {
+	if available["calendar"] {
 		c.Calendar = controller.NewCalendarController(cl.Calendar)
 	}
-	if cl.GitHub != nil {
+	if available["github"] {
 		c.GitHub = controller.NewGitHubController(cl.GitHub)
 	}
 	if cl.Jira != nil {
@@ -97,101 +245,26 @@ func NewControllers(
 	if cl.ClickUp != nil {
 		c.ClickUp = controller.NewClickUpController(cl.ClickUp)
 	}
+	if available["figma"] {
+		c.Figma = controller.NewFigmaController(cl.Figma)
+	}
 
 	if sw, ok := skillsLoader.(skills.SkillWriter); ok {
 		c.Skill = controller.NewSkillController(sw)
 	}
 
-	c.Trigger = controller.NewTriggerController(scheduler)
-
-	usageTracker := usecase.NewUsageTracker()
-	c.Usage = controller.NewUsageController(usageTracker)
-
-	var catalogSvc service.CatalogService
-	if pgMem, ok := memorySvc.(*service.PGMemoryService); ok {
-		catalogSvc = service.NewCatalogServiceFromDB(pgMem.DB())
-	} else {
-		catalogSvc = service.NullCatalogService{}
-	}
-	c.Catalog = controller.NewCatalogController(catalogSvc)
-
 	rubric, _ := skills.LoadRubric("skills/qa-rubric.yaml")
 	c.SkillsQA = controller.NewSkillsQAController(skillsLoader, rubric)
 
-	healthChecks := buildHealthChecks(cl)
-	healthChecker := usecase.NewHealthChecker(healthChecks, catalogSvc)
-	healthChecker.Start(5 * time.Minute)
-	c.Health = controller.NewHealthController(healthChecker)
+	checker := buildHealthChecker(available, catalogSvc)
+	c.healthChecker = checker
+	c.Health = controller.NewHealthController(checker)
 
-	if cl.Figma != nil {
-		c.Figma = controller.NewFigmaController(cl.Figma)
-	}
-
-	// Shared MessageRouter for all messaging channels.
-	var router *usecase.MessageRouter
-	if cl.WhatsApp != nil || cl.Telegram != nil {
-		// Reminder manager sends reminders via the first available channel.
-		var reminderMgr *usecase.ReminderManager
-		if cl.WhatsApp != nil && cfg.WhatsAppTo != "" {
-			reminderMgr = usecase.NewReminderManager(func(text string) {
-				_ = cl.WhatsApp.SendTextMessage(cfg.WhatsAppTo, text)
-			})
-		}
-
-		var sw skills.SkillWriter
-		if writer, ok := skillsLoader.(skills.SkillWriter); ok {
-			sw = writer
-		}
-
-		toolReg := usecase.BuildToolRegistry(financeUC, memorySvc, embedder, cl.Calendar, cl.Gmail, cl.Todoist, cl.GitHub, cl.Jira, cl.Spotify, cl.Notion, cl.Obsidian, sw, reminderMgr)
-		toolReg.SetCatalog(catalogSvc)
-		toolReg.SetHooks(hooksRegistry)
-		if cfg.DryRunTools != "" {
-			toolReg.SetDryRunTools(strings.Split(cfg.DryRunTools, ","))
-		}
-
-		var agent *usecase.AgentUseCase
-		var orchestrator *usecase.AgentOrchestrator
-		if tp, ok := cl.AI.(domain.ToolUseProvider); ok {
-			agent = usecase.NewAgentUseCase(tp, toolReg)
-			if loaded, err := skillsLoader.LoadEnabled(); err == nil {
-				agent.SetSkills(loaded)
-			}
-			agentDefs := usecase.DefaultAgents()
-			agentsLoader := agents.NewLoader(cfg.AgentsDir)
-			if loaded, err := agentsLoader.LoadAll(); err == nil && len(loaded) > 0 {
-				agentDefs = loaded
-			}
-			orchestrator = usecase.NewAgentOrchestrator(tp, toolReg, agentDefs)
-		}
-
-		var transcriber domain.Transcriber
-		if cl.Transcriber != nil {
-			transcriber = cl.Transcriber
-		}
-
-		rulesLoader := rules.NewLoader(cfg.RulesDir)
-		router = usecase.NewMessageRouter(chatUC, cl.AI, agent, orchestrator, transcriber, skillsLoader, rulesLoader, hooksRegistry, usageTracker, cfg.WhatsAppTo)
-
-		profileLoader := profiles.NewLoader(cfg.ProfilesDir)
-		if profile, err := profileLoader.Load(cfg.DefaultProfile); err == nil {
-			router.SetProfile(profile)
-		}
-
-		router.SetDependencyChecker(skills.NewDependencyChecker(map[string]bool{
-			"calendar": cl.Calendar != nil,
-			"sheets":   cl.Sheets != nil,
-			"github":   cl.GitHub != nil,
-			"jira":     cl.Jira != nil,
-			"spotify":  cl.Spotify != nil,
-			"todoist":  cl.Todoist != nil,
-			"gmail":    cl.Gmail != nil,
-			"notion":   cl.Notion != nil,
-			"obsidian": cl.Obsidian != nil,
-			"clickup":  cl.ClickUp != nil,
-			"figma":    cl.Figma != nil,
-		}))
-	}
+	router := buildMessageRouter(
+		cfg, cl, available,
+		financeUC, memorySvc, embedder,
+		chatUC, catalogSvc, skillsLoader, hooksRegistry, usageTracker,
+	)
 
 	if router != nil {
 		c.Pairing = func(req web.Request) web.Response {
@@ -201,45 +274,13 @@ func NewControllers(
 		}
 	}
 
-	if cl.WhatsApp != nil && cfg.WhatsAppVerifyToken != "" && router != nil {
-		c.WhatsApp = controller.NewWhatsAppController(router, cl.WhatsApp, cfg.WhatsAppVerifyToken, cfg.WhatsAppAppSecret)
+	if available["whatsapp"] && cfg.WhatsApp.VerifyToken != "" && router != nil {
+		c.WhatsApp = controller.NewWhatsAppController(router, cl.WhatsApp, cfg.WhatsApp.VerifyToken, cfg.WhatsApp.AppSecret)
 	}
 
-	if cl.Telegram != nil && router != nil {
-		c.Telegram = controller.NewTelegramController(router, cl.Telegram, cfg.TelegramSecretToken, cfg.TelegramBotUsername)
+	if available["telegram"] && router != nil {
+		c.Telegram = controller.NewTelegramController(router, cl.Telegram, cfg.Telegram.SecretToken, cfg.Telegram.BotUsername)
 	}
 
 	return c
-}
-
-func buildHealthChecks(cl Clients) []usecase.IntegrationCheck {
-	var checks []usecase.IntegrationCheck
-	type named struct {
-		name      string
-		available bool
-	}
-	integrations := []named{
-		{"calendar", cl.Calendar != nil},
-		{"github", cl.GitHub != nil},
-		{"jira", cl.Jira != nil},
-		{"spotify", cl.Spotify != nil},
-		{"todoist", cl.Todoist != nil},
-		{"gmail", cl.Gmail != nil},
-		{"notion", cl.Notion != nil},
-		{"obsidian", cl.Obsidian != nil},
-		{"clickup", cl.ClickUp != nil},
-		{"figma", cl.Figma != nil},
-		{"whatsapp", cl.WhatsApp != nil},
-		{"telegram", cl.Telegram != nil},
-	}
-	for _, ig := range integrations {
-		ig := ig
-		if ig.available {
-			checks = append(checks, usecase.IntegrationCheck{
-				Name:  ig.name,
-				Check: func() error { return nil },
-			})
-		}
-	}
-	return checks
 }

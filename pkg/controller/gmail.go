@@ -4,20 +4,23 @@ import (
 	"net/http"
 	"strconv"
 
-	"jarvis/clients"
 	"jarvis/pkg/domain"
 	"jarvis/web"
 )
 
 const defaultMaxResults = 10
 
-// GmailController handles Gmail API endpoints.
-type GmailController struct {
-	client *clients.GmailClient
+type gmailClient interface {
+	ListUnread(maxResults int) ([]domain.GmailEmail, error)
+	GetMessage(messageID string) (domain.GmailEmail, error)
 }
 
-// NewGmailController creates a new GmailController.
-func NewGmailController(client *clients.GmailClient) *GmailController {
+// GmailController handles Gmail API endpoints.
+type GmailController struct {
+	client gmailClient
+}
+
+func NewGmailController(client gmailClient) *GmailController {
 	return &GmailController{client: client}
 }
 
@@ -35,15 +38,8 @@ func (c *GmailController) ListUnread(req web.Request) web.Response {
 		return web.NewJSONResponse(http.StatusInternalServerError, domain.GmailListResponse{Error: err.Error()})
 	}
 
-	domainEmails := make([]domain.GmailEmail, len(emails))
-	for i, e := range emails {
-		domainEmails[i] = domain.GmailEmail{
-			ID: e.ID, From: e.From, Subject: e.Subject, Snippet: e.Snippet, Date: e.Date,
-		}
-	}
-
 	return web.NewJSONResponse(http.StatusOK, domain.GmailListResponse{
-		Success: true, Emails: domainEmails,
+		Success: true, Emails: emails,
 	})
 }
 
@@ -61,9 +57,6 @@ func (c *GmailController) GetMessage(req web.Request) web.Response {
 
 	return web.NewJSONResponse(http.StatusOK, domain.GmailMessageResponse{
 		Success: true,
-		Email: &domain.GmailEmail{
-			ID: email.ID, From: email.From, Subject: email.Subject,
-			Snippet: email.Snippet, Date: email.Date,
-		},
+		Email:   &email,
 	})
 }

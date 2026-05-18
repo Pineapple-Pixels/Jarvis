@@ -15,6 +15,26 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// scanRows iterates rows, applies scanner to each row, and collects the results.
+// It handles rows.Close (via the caller's defer) and rows.Err automatically.
+// T can be any type; the scanner function owns all Scan + Unmarshal calls.
+func scanRows[T any](rows *sql.Rows, scanner func(*sql.Rows) (T, error)) ([]T, error) {
+	var results []T
+	for rows.Next() {
+		item, err := scanner(rows)
+		if err != nil {
+			// Log and skip the bad row — consistent with the previous behaviour.
+			log.Printf("pgstore: scan row: %v", err)
+			continue
+		}
+		results = append(results, item)
+	}
+	if err := rows.Err(); err != nil {
+		return results, fmt.Errorf("pgstore: rows iteration: %w", err)
+	}
+	return results, nil
+}
+
 type PGMemoryService struct {
 	db *sql.DB
 }
@@ -55,53 +75,58 @@ func (s *PGMemoryService) Save(content string, tags []string, embedding []float6
 	return id, nil
 }
 
+type scoredMemory struct {
+	mem   domain.Memory
+	score float64
+}
+
 func (s *PGMemoryService) Search(queryEmbedding []float64, limit int) ([]domain.Memory, error) {
-	rows, err := s.db.Query(sqldata.SelectMemories)
+	// candidateMultiplier gives the SQL query a wider pool to rank from while
+	// still capping the table scan. Cosine similarity + time-decay reranks
+	// within this candidate set in application code (embeddings are JSONB, not
+	// pgvector, so in-DB distance is not available yet).
+	const candidateMultiplier = 10
+	sqlLimit := limit * candidateMultiplier
+
+	rows, err := s.db.Query(sqldata.SelectMemories, sqlLimit)
 	if err != nil {
 		return nil, domain.Wrapf(domain.ErrStoreSearch, err)
 	}
 	defer rows.Close()
 
-	type scored struct {
-		mem   domain.Memory
-		score float64
-	}
-
-	var results []scored
-	for rows.Next() {
+	scored, err := scanRows(rows, func(r *sql.Rows) (scoredMemory, error) {
 		var m domain.Memory
 		var tagsStr, embStr string
-		if err := rows.Scan(&m.ID, &m.Content, &tagsStr, &embStr, &m.CreatedAt); err != nil {
-			log.Printf("pgstore: scan row: %v", err)
-			continue
+		if err := r.Scan(&m.ID, &m.Content, &tagsStr, &embStr, &m.CreatedAt); err != nil {
+			return scoredMemory{}, fmt.Errorf("scan memory id: %w", err)
 		}
-
 		if err := json.Unmarshal([]byte(tagsStr), &m.Tags); err != nil {
 			log.Printf("pgstore: unmarshal tags id=%d: %v", m.ID, err)
 		}
-
 		var emb []float64
 		if err := json.Unmarshal([]byte(embStr), &emb); err != nil {
 			log.Printf("pgstore: unmarshal embedding id=%d: %v", m.ID, err)
 		}
-
 		similarity := cosineSimilarity(queryEmbedding, emb)
 		decay := timeDecay(m.CreatedAt)
-		results = append(results, scored{mem: m, score: similarity * decay})
+		return scoredMemory{mem: m, score: similarity * decay}, nil
+	})
+	if err != nil {
+		return nil, domain.Wrapf(domain.ErrStoreSearch, err)
 	}
 
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].score > results[j].score
+	sort.Slice(scored, func(i, j int) bool {
+		return scored[i].score > scored[j].score
 	})
 
-	if limit > len(results) {
-		limit = len(results)
+	if limit > len(scored) {
+		limit = len(scored)
 	}
 
 	memories := make([]domain.Memory, limit)
 	for i := 0; i < limit; i++ {
-		memories[i] = results[i].mem
-		memories[i].Score = results[i].score
+		memories[i] = scored[i].mem
+		memories[i].Score = scored[i].score
 	}
 
 	return memories, nil
@@ -114,22 +139,21 @@ func (s *PGMemoryService) SearchFTS(query string, limit int) ([]domain.Memory, e
 	}
 	defer rows.Close()
 
-	var results []domain.Memory
-	for rows.Next() {
+	results, err := scanRows(rows, func(r *sql.Rows) (domain.Memory, error) {
 		var m domain.Memory
 		var tagsStr string
 		var rank float64
-		if err := rows.Scan(&m.ID, &m.Content, &tagsStr, &m.CreatedAt, &rank); err != nil {
-			log.Printf("pgstore: scan fts row: %v", err)
-			continue
+		if err := r.Scan(&m.ID, &m.Content, &tagsStr, &m.CreatedAt, &rank); err != nil {
+			return domain.Memory{}, fmt.Errorf("scan fts row: %w", err)
 		}
-
 		if err := json.Unmarshal([]byte(tagsStr), &m.Tags); err != nil {
 			log.Printf("pgstore: unmarshal tags id=%d: %v", m.ID, err)
 		}
-
 		m.Score = rank * timeDecay(m.CreatedAt)
-		results = append(results, m)
+		return m, nil
+	})
+	if err != nil {
+		return nil, domain.Wrapf(domain.ErrStoreFTS, err)
 	}
 
 	return results, nil
@@ -177,14 +201,15 @@ func (s *PGMemoryService) LoadConversation(sessionID string, limit int) ([]domai
 	}
 	defer rows.Close()
 
-	var msgs []domain.ConversationMessage
-	for rows.Next() {
+	msgs, err := scanRows(rows, func(r *sql.Rows) (domain.ConversationMessage, error) {
 		var m domain.ConversationMessage
-		if err := rows.Scan(&m.Role, &m.Content, &m.CreatedAt); err != nil {
-			log.Printf("pgstore: scan conversation row: %v", err)
-			continue
+		if err := r.Scan(&m.Role, &m.Content, &m.CreatedAt); err != nil {
+			return domain.ConversationMessage{}, fmt.Errorf("scan conversation row: %w", err)
 		}
-		msgs = append(msgs, m)
+		return m, nil
+	})
+	if err != nil {
+		return nil, domain.Wrapf(domain.ErrConversationLoad, err)
 	}
 
 	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
@@ -240,13 +265,20 @@ func (s *PGMemoryService) GetHabitStreak(name string) (int, int, error) {
 	}
 	defer rows.Close()
 
+	dates, err := scanRows(rows, func(r *sql.Rows) (time.Time, error) {
+		var d time.Time
+		if err := r.Scan(&d); err != nil {
+			return time.Time{}, fmt.Errorf("scan habit date: %w", err)
+		}
+		return d, nil
+	})
+	if err != nil {
+		return 0, 0, domain.Wrapf(domain.ErrHabitQuery, err)
+	}
+
 	streak := 0
 	expected := time.Now().Truncate(24 * time.Hour)
-	for rows.Next() {
-		var d time.Time
-		if err := rows.Scan(&d); err != nil {
-			break
-		}
+	for _, d := range dates {
 		d = d.Truncate(24 * time.Hour)
 		if d.Equal(expected) {
 			streak++
@@ -266,14 +298,17 @@ func (s *PGMemoryService) ListHabitsToday() ([]string, error) {
 	}
 	defer rows.Close()
 
-	var habits []string
-	for rows.Next() {
+	habits, err := scanRows(rows, func(r *sql.Rows) (string, error) {
 		var name string
-		if err := rows.Scan(&name); err != nil {
-			continue
+		if err := r.Scan(&name); err != nil {
+			return "", fmt.Errorf("scan habit row: %w", err)
 		}
-		habits = append(habits, name)
+		return name, nil
+	})
+	if err != nil {
+		return nil, domain.Wrapf(domain.ErrHabitQuery, err)
 	}
+
 	return habits, nil
 }
 
@@ -284,15 +319,17 @@ func (s *PGMemoryService) ListExpenses(from, to string) ([]domain.Expense, error
 	}
 	defer rows.Close()
 
-	var expenses []domain.Expense
-	for rows.Next() {
+	expenses, err := scanRows(rows, func(r *sql.Rows) (domain.Expense, error) {
 		var e domain.Expense
-		if err := rows.Scan(&e.ID, &e.Date, &e.Description, &e.Category, &e.Amount, &e.AmountUSD, &e.PaidBy); err != nil {
-			log.Printf("pgstore: scan expense row: %v", err)
-			continue
+		if err := r.Scan(&e.ID, &e.Date, &e.Description, &e.Category, &e.Amount, &e.AmountUSD, &e.PaidBy); err != nil {
+			return domain.Expense{}, fmt.Errorf("scan expense row: %w", err)
 		}
-		expenses = append(expenses, e)
+		return e, nil
+	})
+	if err != nil {
+		return nil, domain.Wrapf(domain.ErrFinanceSummary, err)
 	}
+
 	return expenses, nil
 }
 

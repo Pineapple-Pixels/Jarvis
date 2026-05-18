@@ -2,17 +2,22 @@ package controller
 
 import (
 	"net/http"
+	"time"
 
-	"jarvis/clients"
 	"jarvis/pkg/domain"
 	"jarvis/web"
 )
 
-type CalendarController struct {
-	client *clients.CalendarClient
+type calendarClient interface {
+	GetTodayEvents() ([]domain.CalendarEvent, error)
+	CreateEvent(summary string, start, end time.Time) (string, error)
 }
 
-func NewCalendarController(client *clients.CalendarClient) *CalendarController {
+type CalendarController struct {
+	client calendarClient
+}
+
+func NewCalendarController(client calendarClient) *CalendarController {
 	return &CalendarController{client: client}
 }
 
@@ -23,7 +28,7 @@ func (c *CalendarController) GetTodayEvents(req web.Request) web.Response {
 	}
 
 	return web.NewJSONResponse(http.StatusOK, domain.CalendarListResponse{
-		Success: true, Events: toCalendarEvents(events),
+		Success: true, Events: events,
 	})
 }
 
@@ -46,12 +51,3 @@ func (c *CalendarController) CreateEvent(req web.Request) web.Response {
 	return web.NewJSONResponse(http.StatusCreated, domain.CalendarEventResponse{Success: true, ID: id})
 }
 
-func toCalendarEvents(events []clients.CalendarEvent) []domain.CalendarEvent {
-	result := make([]domain.CalendarEvent, len(events))
-	for i, e := range events {
-		result[i] = domain.CalendarEvent{
-			ID: e.ID, Summary: e.Summary, Start: e.Start, End: e.End, Location: e.Location,
-		}
-	}
-	return result
-}

@@ -15,12 +15,10 @@ func setupRoutes(c Controllers) boot.RoutesMapper[boot.GinRouter] {
 	}
 }
 
-func middlewareMapper(webhookSecret string) boot.MiddlewareMapper[boot.GinMiddlewareRouter] {
+func middlewareMapper(webhookSecret string, allowInsecure bool) boot.MiddlewareMapper[boot.GinMiddlewareRouter] {
 	return func(_ context.Context, _ boot.Config, router boot.GinMiddlewareRouter) {
 		router.Use(webgin.NewInterceptor(middleware.TraceID()))
-		if webhookSecret != "" {
-			router.Use(webgin.NewInterceptor(middleware.WebhookAuth(webhookSecret)))
-		}
+		router.Use(webgin.NewInterceptor(middleware.WebhookAuth(webhookSecret, allowInsecure)))
 	}
 }
 

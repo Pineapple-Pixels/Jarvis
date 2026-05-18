@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"jarvis/clients"
 	"jarvis/internal/hooks"
 	"jarvis/pkg/domain"
 	"jarvis/pkg/service"
@@ -132,7 +131,7 @@ func (s *Scheduler) runJob(job *domain.Job, now time.Time) {
 	})
 }
 
-func NewDailyBriefingJob(ai domain.AIProvider, waNumber string, waClient *clients.WhatsAppClient, calendarClient *clients.CalendarClient, gmailClient *clients.GmailClient, memorySvc service.MemoryService) domain.Job {
+func NewDailyBriefingJob(ai domain.AIProvider, waNumber string, waClient domain.WhatsAppSender, calendarClient CalendarProvider, gmailClient GmailProvider, memorySvc service.ExpenseStore) domain.Job {
 	return domain.Job{
 		ID:     domain.JobDailyBriefing,
 		Hour:   domain.DailyBriefingHour,
@@ -245,7 +244,7 @@ func NewDailyJournalJob(ai domain.AIProvider, waNumber string, waClient *clients
 
 // NewSessionPruningJob deletes conversation sessions older than SessionTTLDays.
 // Runs daily at 3am. Delivery is log-only (no notification).
-func NewSessionPruningJob(memorySvc service.MemoryService) domain.Job {
+func NewSessionPruningJob(memorySvc service.ConversationStore) domain.Job {
 	return domain.Job{
 		ID:       domain.JobSessionPruning,
 		Hour:     domain.SessionPruningHour,

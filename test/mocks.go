@@ -327,3 +327,27 @@ func NewMockClaudeServerError(statusCode int, errType, errMsg string) (*httptest
 	client := clients.NewClaudeClientWithBaseURL("test-key", "test-model", srv.URL)
 	return srv, client
 }
+
+// MockCatalogService mocks service.CatalogService.
+type MockCatalogService struct {
+	mock.Mock
+}
+
+func (m *MockCatalogService) RecordUsage(name, entryType string, success bool) error {
+	args := m.Called(name, entryType, success)
+	return args.Error(0)
+}
+
+func (m *MockCatalogService) GetAll() ([]domain.CatalogEntry, error) {
+	args := m.Called()
+	entries, _ := args.Get(0).([]domain.CatalogEntry)
+	return entries, args.Error(1)
+}
+
+func (m *MockCatalogService) GetByName(name, entryType string) (*domain.CatalogEntry, error) {
+	args := m.Called(name, entryType)
+	entry, _ := args.Get(0).(*domain.CatalogEntry)
+	return entry, args.Error(1)
+}
+
+var _ service.CatalogService = (*MockCatalogService)(nil)

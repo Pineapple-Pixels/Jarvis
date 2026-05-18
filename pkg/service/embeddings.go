@@ -38,28 +38,43 @@ func (e *AIEmbedder) Embed(text string) ([]float64, error) {
 	return vector, nil
 }
 
-// MemoryService defines the contract for memory and conversation storage.
-// Implementations: PGMemoryService.
-type MemoryService interface {
+// MemoryStore covers core note operations: save, search variants, and delete.
+type MemoryStore interface {
 	Save(content string, tags []string, embedding []float64) (int64, error)
 	Search(queryEmbedding []float64, limit int) ([]domain.Memory, error)
 	SearchFTS(query string, limit int) ([]domain.Memory, error)
 	SearchHybrid(query string, queryEmbedding []float64, limit int, vecWeight, ftsWeight float64) ([]domain.Memory, error)
 	Delete(id int64) error
+}
 
+// ConversationStore manages chat history persistence.
+type ConversationStore interface {
 	SaveConversation(sessionID, role, content string) error
 	LoadConversation(sessionID string, limit int) ([]domain.ConversationMessage, error)
 	ClearConversation(sessionID string) error
 	ReplaceConversation(sessionID string, msgs []domain.ConversationMessage) error
+	PruneSessions(olderThanDays int) (int64, error)
+}
 
+// HabitStore handles habit logging and streak queries.
+type HabitStore interface {
 	LogHabit(name string) error
 	GetHabitStreak(name string) (int, int, error)
 	ListHabitsToday() ([]string, error)
+}
 
+// ExpenseStore handles expense persistence queries (read side only — writes go via FinanceService).
+type ExpenseStore interface {
 	ListExpenses(from, to string) ([]domain.Expense, error)
+}
 
-	PruneSessions(olderThanDays int) (int64, error)
-
+// MemoryService is the composite interface implemented by PGMemoryService.
+// Wiring code and mocks use this; individual usecases prefer the narrower sub-interfaces.
+type MemoryService interface {
+	MemoryStore
+	ConversationStore
+	HabitStore
+	ExpenseStore
 	Close() error
 }
 

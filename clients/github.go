@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"jarvis/pkg/domain"
 )
 
 const (
@@ -15,16 +17,16 @@ const (
 	githubAcceptJSON     = "application/vnd.github+json"
 )
 
-// GitHubRepo represents a GitHub repository.
-type GitHubRepo struct {
+// githubRepo is the raw GitHub API response shape for a repository.
+type githubRepo struct {
 	ID       int64  `json:"id"`
 	Name     string `json:"name"`
 	FullName string `json:"full_name"`
 	URL      string `json:"html_url"`
 }
 
-// GitHubIssue represents a GitHub issue.
-type GitHubIssue struct {
+// githubIssue is the raw GitHub API response shape for an issue.
+type githubIssue struct {
 	ID     int64  `json:"id"`
 	Number int    `json:"number"`
 	Title  string `json:"title"`
@@ -32,8 +34,8 @@ type GitHubIssue struct {
 	URL    string `json:"html_url"`
 }
 
-// GitHubPullRequest represents a GitHub pull request.
-type GitHubPullRequest struct {
+// githubPullRequest is the raw GitHub API response shape for a pull request.
+type githubPullRequest struct {
 	ID     int64  `json:"id"`
 	Number int    `json:"number"`
 	Title  string `json:"title"`
@@ -66,38 +68,46 @@ func NewGitHubClientWithBaseURL(token, baseURL string) *GitHubClient {
 }
 
 // ListRepos returns the authenticated user's repositories.
-func (c *GitHubClient) ListRepos() ([]GitHubRepo, error) {
+func (c *GitHubClient) ListRepos() ([]domain.GitHubRepo, error) {
 	resp, err := c.doRequest(http.MethodGet, "/user/repos", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var repos []GitHubRepo
-	if err := json.Unmarshal(resp, &repos); err != nil {
+	var raw []githubRepo
+	if err := json.Unmarshal(resp, &raw); err != nil {
 		return nil, fmt.Errorf("github: parse repos: %w", err)
 	}
 
+	repos := make([]domain.GitHubRepo, len(raw))
+	for i, r := range raw {
+		repos[i] = domain.GitHubRepo{ID: r.ID, Name: r.Name, FullName: r.FullName, URL: r.URL}
+	}
 	return repos, nil
 }
 
 // ListIssues returns issues for the given repository.
-func (c *GitHubClient) ListIssues(owner, repo string) ([]GitHubIssue, error) {
+func (c *GitHubClient) ListIssues(owner, repo string) ([]domain.GitHubIssue, error) {
 	path := fmt.Sprintf("/repos/%s/%s/issues", owner, repo)
 	resp, err := c.doRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var issues []GitHubIssue
-	if err := json.Unmarshal(resp, &issues); err != nil {
+	var raw []githubIssue
+	if err := json.Unmarshal(resp, &raw); err != nil {
 		return nil, fmt.Errorf("github: parse issues: %w", err)
 	}
 
+	issues := make([]domain.GitHubIssue, len(raw))
+	for i, iss := range raw {
+		issues[i] = domain.GitHubIssue{ID: iss.ID, Number: iss.Number, Title: iss.Title, State: iss.State, URL: iss.URL}
+	}
 	return issues, nil
 }
 
 // CreateIssue creates a new issue in the given repository.
-func (c *GitHubClient) CreateIssue(owner, repo, title, body string) (GitHubIssue, error) {
+func (c *GitHubClient) CreateIssue(owner, repo, title, body string) (domain.GitHubIssue, error) {
 	path := fmt.Sprintf("/repos/%s/%s/issues", owner, repo)
 	payload := map[string]string{
 		"title": title,
@@ -106,30 +116,34 @@ func (c *GitHubClient) CreateIssue(owner, repo, title, body string) (GitHubIssue
 
 	resp, err := c.doRequest(http.MethodPost, path, payload)
 	if err != nil {
-		return GitHubIssue{}, err
+		return domain.GitHubIssue{}, err
 	}
 
-	var issue GitHubIssue
-	if err := json.Unmarshal(resp, &issue); err != nil {
-		return GitHubIssue{}, fmt.Errorf("github: parse create issue: %w", err)
+	var raw githubIssue
+	if err := json.Unmarshal(resp, &raw); err != nil {
+		return domain.GitHubIssue{}, fmt.Errorf("github: parse create issue: %w", err)
 	}
 
-	return issue, nil
+	return domain.GitHubIssue{ID: raw.ID, Number: raw.Number, Title: raw.Title, State: raw.State, URL: raw.URL}, nil
 }
 
 // ListPRs returns pull requests for the given repository.
-func (c *GitHubClient) ListPRs(owner, repo string) ([]GitHubPullRequest, error) {
+func (c *GitHubClient) ListPRs(owner, repo string) ([]domain.GitHubPullRequest, error) {
 	path := fmt.Sprintf("/repos/%s/%s/pulls", owner, repo)
 	resp, err := c.doRequest(http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var prs []GitHubPullRequest
-	if err := json.Unmarshal(resp, &prs); err != nil {
+	var raw []githubPullRequest
+	if err := json.Unmarshal(resp, &raw); err != nil {
 		return nil, fmt.Errorf("github: parse pull requests: %w", err)
 	}
 
+	prs := make([]domain.GitHubPullRequest, len(raw))
+	for i, pr := range raw {
+		prs[i] = domain.GitHubPullRequest{ID: pr.ID, Number: pr.Number, Title: pr.Title, State: pr.State, URL: pr.URL, Draft: pr.Draft}
+	}
 	return prs, nil
 }
 

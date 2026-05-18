@@ -16,12 +16,12 @@ Respondé en texto plano, sin markdown.`
 const projectSearchLimit = 20
 
 type ProjectUseCase struct {
-	repo     service.MemoryService
+	repo     service.MemoryStore
 	embedder service.Embedder
 	ai       domain.AIProvider
 }
 
-func NewProjectUseCase(repo service.MemoryService, embedder service.Embedder, ai domain.AIProvider) *ProjectUseCase {
+func NewProjectUseCase(repo service.MemoryStore, embedder service.Embedder, ai domain.AIProvider) *ProjectUseCase {
 	return &ProjectUseCase{repo: repo, embedder: embedder, ai: ai}
 }
 

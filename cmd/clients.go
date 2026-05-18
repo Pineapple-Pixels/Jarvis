@@ -56,55 +56,55 @@ func newAIProviderWithFailover(cfg config.Config) domain.AIProvider {
 }
 
 func newAIProvider(cfg config.Config) domain.AIProvider {
-	switch cfg.AIProvider {
+	switch cfg.AI.Provider {
 	case "openai":
-		log.Printf("AI provider: OpenAI (model: %s)", cfg.OpenAIModel)
-		return clients.NewOpenAIClient(cfg.OpenAIAPIKey, cfg.OpenAIModel)
+		log.Printf("AI provider: OpenAI (model: %s)", cfg.AI.OpenAIModel)
+		return clients.NewOpenAIClient(cfg.AI.OpenAIAPIKey, cfg.AI.OpenAIModel)
 	default:
-		log.Printf("AI provider: Claude (model: %s)", cfg.ClaudeModel)
-		return clients.NewClaudeClient(cfg.ClaudeAPIKey, cfg.ClaudeModel)
+		log.Printf("AI provider: Claude (model: %s)", cfg.AI.ClaudeModel)
+		return clients.NewClaudeClient(cfg.AI.ClaudeAPIKey, cfg.AI.ClaudeModel)
 	}
 }
 
 func newAIFallback(cfg config.Config) domain.AIProvider {
-	switch cfg.AIProvider {
+	switch cfg.AI.Provider {
 	case "openai":
-		if cfg.ClaudeAPIKey == "" {
+		if cfg.AI.ClaudeAPIKey == "" {
 			return nil
 		}
-		log.Printf("AI fallback: Claude (model: %s)", cfg.ClaudeModel)
-		return clients.NewClaudeClient(cfg.ClaudeAPIKey, cfg.ClaudeModel)
+		log.Printf("AI fallback: Claude (model: %s)", cfg.AI.ClaudeModel)
+		return clients.NewClaudeClient(cfg.AI.ClaudeAPIKey, cfg.AI.ClaudeModel)
 	default:
-		if cfg.OpenAIAPIKey == "" {
+		if cfg.AI.OpenAIAPIKey == "" {
 			return nil
 		}
-		log.Printf("AI fallback: OpenAI (model: %s)", cfg.OpenAIModel)
-		return clients.NewOpenAIClient(cfg.OpenAIAPIKey, cfg.OpenAIModel)
+		log.Printf("AI fallback: OpenAI (model: %s)", cfg.AI.OpenAIModel)
+		return clients.NewOpenAIClient(cfg.AI.OpenAIAPIKey, cfg.AI.OpenAIModel)
 	}
 }
 
 func newAILightProvider(cfg config.Config, primary domain.AIProvider) domain.AIProvider {
-	switch cfg.AIProvider {
+	switch cfg.AI.Provider {
 	case "openai":
-		if cfg.OpenAIModelLight == "" || cfg.OpenAIModelLight == cfg.OpenAIModel {
+		if cfg.AI.OpenAIModelLight == "" || cfg.AI.OpenAIModelLight == cfg.AI.OpenAIModel {
 			return primary
 		}
-		log.Printf("AI light provider: OpenAI (model: %s)", cfg.OpenAIModelLight)
-		return clients.NewOpenAIClient(cfg.OpenAIAPIKey, cfg.OpenAIModelLight)
+		log.Printf("AI light provider: OpenAI (model: %s)", cfg.AI.OpenAIModelLight)
+		return clients.NewOpenAIClient(cfg.AI.OpenAIAPIKey, cfg.AI.OpenAIModelLight)
 	default:
-		if cfg.ClaudeModelLight == "" || cfg.ClaudeModelLight == cfg.ClaudeModel {
+		if cfg.AI.ClaudeModelLight == "" || cfg.AI.ClaudeModelLight == cfg.AI.ClaudeModel {
 			return primary
 		}
-		log.Printf("AI light provider: Claude (model: %s)", cfg.ClaudeModelLight)
-		return clients.NewClaudeClient(cfg.ClaudeAPIKey, cfg.ClaudeModelLight)
+		log.Printf("AI light provider: Claude (model: %s)", cfg.AI.ClaudeModelLight)
+		return clients.NewClaudeClient(cfg.AI.ClaudeAPIKey, cfg.AI.ClaudeModelLight)
 	}
 }
 
 func newSheetsClient(cfg config.Config) *clients.SheetsClient {
-	if cfg.SheetsID == "" || cfg.SheetsCredFile == "" {
+	if cfg.Google.SheetsID == "" || cfg.Google.SheetsCredFile == "" {
 		return nil
 	}
-	client, err := clients.NewSheetsClient(cfg.SheetsCredFile, cfg.SheetsID)
+	client, err := clients.NewSheetsClient(cfg.Google.SheetsCredFile, cfg.Google.SheetsID)
 	if err != nil {
 		log.Printf("WARNING: sheets client not available: %v", err)
 		return nil
@@ -113,18 +113,18 @@ func newSheetsClient(cfg config.Config) *clients.SheetsClient {
 }
 
 func newWhatsAppClient(cfg config.Config) *clients.WhatsAppClient {
-	if cfg.WhatsAppPhoneID == "" || cfg.WhatsAppToken == "" {
+	if cfg.WhatsApp.PhoneID == "" || cfg.WhatsApp.Token == "" {
 		return nil
 	}
 	log.Println("WhatsApp client configured")
-	return clients.NewWhatsAppClient(cfg.WhatsAppPhoneID, cfg.WhatsAppToken)
+	return clients.NewWhatsAppClient(cfg.WhatsApp.PhoneID, cfg.WhatsApp.Token)
 }
 
 func newCalendarClient(cfg config.Config) *clients.CalendarClient {
-	if cfg.GoogleCalendarID == "" || cfg.SheetsCredFile == "" {
+	if cfg.Google.CalendarID == "" || cfg.Google.SheetsCredFile == "" {
 		return nil
 	}
-	client, err := clients.NewCalendarClient(cfg.SheetsCredFile, cfg.GoogleCalendarID)
+	client, err := clients.NewCalendarClient(cfg.Google.SheetsCredFile, cfg.Google.CalendarID)
 	if err != nil {
 		log.Printf("WARNING: calendar client not available: %v", err)
 		return nil
@@ -133,58 +133,58 @@ func newCalendarClient(cfg config.Config) *clients.CalendarClient {
 }
 
 func newNotionClient(cfg config.Config) *clients.NotionClient {
-	if cfg.NotionAPIKey == "" {
+	if cfg.Integrations.NotionAPIKey == "" {
 		return nil
 	}
 	log.Println("Notion client configured")
-	return clients.NewNotionClient(cfg.NotionAPIKey)
+	return clients.NewNotionClient(cfg.Integrations.NotionAPIKey)
 }
 
 func newObsidianVault(cfg config.Config) *clients.ObsidianVault {
-	if cfg.ObsidianVaultPath == "" {
+	if cfg.Integrations.ObsidianVaultPath == "" {
 		return nil
 	}
-	log.Printf("Obsidian vault: %s", cfg.ObsidianVaultPath)
-	return clients.NewObsidianVault(cfg.ObsidianVaultPath)
+	log.Printf("Obsidian vault: %s", cfg.Integrations.ObsidianVaultPath)
+	return clients.NewObsidianVault(cfg.Integrations.ObsidianVaultPath)
 }
 
 func newGitHubClient(cfg config.Config) *clients.GitHubClient {
-	if cfg.GitHubToken == "" {
+	if cfg.Integrations.GitHubToken == "" {
 		return nil
 	}
 	log.Println("GitHub client configured")
-	return clients.NewGitHubClient(cfg.GitHubToken)
+	return clients.NewGitHubClient(cfg.Integrations.GitHubToken)
 }
 
 func newJiraClient(cfg config.Config) *clients.JiraClient {
-	if cfg.JiraBaseURL == "" || cfg.JiraEmail == "" || cfg.JiraAPIToken == "" {
+	if cfg.Integrations.JiraBaseURL == "" || cfg.Integrations.JiraEmail == "" || cfg.Integrations.JiraAPIToken == "" {
 		return nil
 	}
 	log.Println("Jira client configured")
-	return clients.NewJiraClient(cfg.JiraBaseURL, cfg.JiraEmail, cfg.JiraAPIToken)
+	return clients.NewJiraClient(cfg.Integrations.JiraBaseURL, cfg.Integrations.JiraEmail, cfg.Integrations.JiraAPIToken)
 }
 
 func newSpotifyClient(cfg config.Config) *clients.SpotifyClient {
-	if cfg.SpotifyAccessToken == "" {
+	if cfg.Integrations.SpotifyAccessToken == "" {
 		return nil
 	}
 	log.Println("Spotify client configured")
-	return clients.NewSpotifyClient(cfg.SpotifyAccessToken)
+	return clients.NewSpotifyClient(cfg.Integrations.SpotifyAccessToken)
 }
 
 func newTodoistClient(cfg config.Config) *clients.TodoistClient {
-	if cfg.TodoistAPIToken == "" {
+	if cfg.Integrations.TodoistAPIToken == "" {
 		return nil
 	}
 	log.Println("Todoist client configured")
-	return clients.NewTodoistClient(cfg.TodoistAPIToken)
+	return clients.NewTodoistClient(cfg.Integrations.TodoistAPIToken)
 }
 
 func newGmailClient(cfg config.Config) *clients.GmailClient {
-	if cfg.GmailUserEmail == "" || cfg.SheetsCredFile == "" {
+	if cfg.Integrations.GmailUserEmail == "" || cfg.Google.SheetsCredFile == "" {
 		return nil
 	}
-	client, err := clients.NewGmailClient(cfg.SheetsCredFile, cfg.GmailUserEmail)
+	client, err := clients.NewGmailClient(cfg.Google.SheetsCredFile, cfg.Integrations.GmailUserEmail)
 	if err != nil {
 		log.Printf("WARNING: gmail client not available: %v", err)
 		return nil
@@ -194,33 +194,33 @@ func newGmailClient(cfg config.Config) *clients.GmailClient {
 }
 
 func newClickUpClient(cfg config.Config) *clients.ClickUpClient {
-	if cfg.ClickUpAPIToken == "" {
+	if cfg.Integrations.ClickUpAPIToken == "" {
 		return nil
 	}
 	log.Println("ClickUp client configured")
-	return clients.NewClickUpClient(cfg.ClickUpAPIToken, cfg.ClickUpTeamID)
+	return clients.NewClickUpClient(cfg.Integrations.ClickUpAPIToken, cfg.Integrations.ClickUpTeamID)
 }
 
 func newTranscriber(cfg config.Config) domain.Transcriber {
-	if cfg.OpenAIAPIKey == "" {
+	if cfg.AI.OpenAIAPIKey == "" {
 		return nil
 	}
 	log.Println("Transcriber configured (Whisper)")
-	return clients.NewOpenAIClient(cfg.OpenAIAPIKey, "")
+	return clients.NewOpenAIClient(cfg.AI.OpenAIAPIKey, "")
 }
 
 func newTelegramClient(cfg config.Config) *clients.TelegramClient {
-	if cfg.TelegramBotToken == "" {
+	if cfg.Telegram.BotToken == "" {
 		return nil
 	}
 	log.Println("Telegram client configured")
-	return clients.NewTelegramClient(cfg.TelegramBotToken)
+	return clients.NewTelegramClient(cfg.Telegram.BotToken)
 }
 
 func newFigmaClient(cfg config.Config) *clients.FigmaClient {
-	if cfg.FigmaAccessToken == "" {
+	if cfg.Integrations.FigmaAccessToken == "" {
 		return nil
 	}
 	log.Println("Figma client configured")
-	return clients.NewFigmaClient(cfg.FigmaAccessToken)
+	return clients.NewFigmaClient(cfg.Integrations.FigmaAccessToken)
 }

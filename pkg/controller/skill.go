@@ -1,12 +1,17 @@
 package controller
 
 import (
+	"log"
 	"net/http"
+	"regexp"
 
 	"jarvis/internal/skills"
 	"jarvis/pkg/domain"
 	"jarvis/web"
 )
+
+// skillNamePattern restricts skill names to safe identifiers only.
+var skillNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 // SkillController handles skill management endpoints.
 type SkillController struct {
@@ -39,6 +44,7 @@ func (c *SkillController) ListSkills(req web.Request) web.Response {
 }
 
 // CreateSkill saves a new skill to disk.
+// NOTE: This endpoint should be restricted to admin users in production.
 func (c *SkillController) CreateSkill(req web.Request) web.Response {
 	var payload domain.SkillCreateRequest
 	if err := web.DecodeJSON(req.Body(), &payload); err != nil {
@@ -48,6 +54,12 @@ func (c *SkillController) CreateSkill(req web.Request) web.Response {
 	if err := payload.Validate(); err != nil {
 		return web.NewJSONResponse(http.StatusBadRequest, domain.SkillResponse{Error: err.Error()})
 	}
+
+	if !skillNamePattern.MatchString(payload.Name) {
+		return web.NewJSONResponse(http.StatusBadRequest, domain.SkillResponse{Error: "name must match ^[a-zA-Z0-9_-]+$"})
+	}
+
+	log.Printf("skill: creating skill %q via API", payload.Name)
 
 	enabled := true
 	skill := skills.Skill{

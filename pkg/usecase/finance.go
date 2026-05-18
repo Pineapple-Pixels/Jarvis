@@ -30,7 +30,7 @@ Respondé en texto plano, sin markdown.`
 type FinanceUseCase struct {
 	ai        domain.AIProvider
 	repo      service.FinanceService
-	memorySvc service.MemoryService
+	memorySvc service.ExpenseStore
 }
 
 func NewFinanceUseCase(ai domain.AIProvider, repo service.FinanceService) *FinanceUseCase {
@@ -40,7 +40,7 @@ func NewFinanceUseCase(ai domain.AIProvider, repo service.FinanceService) *Finan
 	}
 }
 
-func (uc *FinanceUseCase) SetMemoryService(svc service.MemoryService) {
+func (uc *FinanceUseCase) SetMemoryService(svc service.ExpenseStore) {
 	uc.memorySvc = svc
 }
 

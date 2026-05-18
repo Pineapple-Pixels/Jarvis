@@ -18,30 +18,41 @@ import (
 type App struct {
 	memorySvc service.MemoryService
 	scheduler *usecase.Scheduler
+	ctrls     Controllers
 	server    boot.Gin
 }
 
 func NewApp(cfg config.Config) *App {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
+	if cfg.Server.WebhookSecret == "" {
+		if cfg.Server.AllowInsecure {
+			log.Println("WARNING: WEBHOOK_SECRET is not set — running in insecure mode (ALLOW_INSECURE=true)")
+		} else {
+			log.Println("WARNING: WEBHOOK_SECRET is not set — all endpoints will return 401; set ALLOW_INSECURE=true to bypass in local dev")
+		}
+	}
+
 	cl := NewClients(cfg)
 	memorySvc := NewMemoryService(cfg)
 	hooksRegistry := hooks.NewRegistry()
-	if cfg.HooksConfigFile != "" {
-		if defs, err := hooks.LoadExternalConfig(cfg.HooksConfigFile); err == nil && len(defs) > 0 {
+	if cfg.Runtime.HooksConfigFile != "" {
+		if defs, err := hooks.LoadExternalConfig(cfg.Runtime.HooksConfigFile); err == nil && len(defs) > 0 {
 			hooksRegistry.RegisterExternal(defs)
-			log.Printf("loaded %d external hooks from %s", len(defs), cfg.HooksConfigFile)
+			log.Printf("loaded %d external hooks from %s", len(defs), cfg.Runtime.HooksConfigFile)
 		}
 	}
 
 	scheduler := NewScheduler(cl, cfg, memorySvc, hooksRegistry)
+	catalogSvc := NewCatalogService(memorySvc)
 
 	ctrls := NewControllers(cl, cfg, memorySvc,
-		NewFinanceService(cl.Sheets, cfg.SheetsSheetName),
+		NewFinanceService(cl.Sheets, cfg.Google.SheetsSheetName),
 		NewEmbedder(cl.AILight),
-		skills.NewCachedLoader(skills.NewLoader(cfg.SkillsDir)),
+		skills.NewCachedLoader(skills.NewLoader(cfg.Runtime.SkillsDir)),
 		hooksRegistry,
 		scheduler,
+		catalogSvc,
 	)
 
 	scheduler.Start()
@@ -49,7 +60,8 @@ func NewApp(cfg config.Config) *App {
 	return &App{
 		memorySvc: memorySvc,
 		scheduler: scheduler,
-		server:    boot.NewGin(middlewareMapper(cfg.WebhookSecret), setupRoutes(ctrls)),
+		ctrls:     ctrls,
+		server:    boot.NewGin(middlewareMapper(cfg.Server.WebhookSecret, cfg.Server.AllowInsecure), setupRoutes(ctrls)),
 	}
 }
 
@@ -71,5 +83,6 @@ func (a *App) Run() {
 
 func (a *App) Close() {
 	a.scheduler.Stop()
+	a.ctrls.Close()
 	a.memorySvc.Close()
 }

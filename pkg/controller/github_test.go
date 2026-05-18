@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"jarvis/clients"
+	"jarvis/pkg/domain"
 	"jarvis/test"
 
 	"github.com/stretchr/testify/assert"
@@ -21,13 +21,13 @@ func newMockGitHubServer() *httptest.Server {
 				{ID: 1, Name: "repo1", FullName: "user/repo1", URL: "https://github.com/user/repo1"},
 			})
 		case r.Method == http.MethodPost:
-			json.NewEncoder(w).Encode(clients.GitHubIssue{ID: 10, Number: 1, Title: "new issue", State: "open"})
+			json.NewEncoder(w).Encode(domain.GitHubIssue{ID: 10, Number: 1, Title: "new issue", State: "open"})
 		case r.URL.Path == "/repos/user/repo1/pulls":
 			json.NewEncoder(w).Encode([]clients.GitHubPullRequest{
 				{ID: 1, Number: 1, Title: "PR 1", State: "open"},
 			})
 		default:
-			json.NewEncoder(w).Encode([]clients.GitHubIssue{
+			json.NewEncoder(w).Encode([]domain.GitHubIssue{
 				{ID: 1, Number: 1, Title: "Issue 1", State: "open"},
 			})
 		}

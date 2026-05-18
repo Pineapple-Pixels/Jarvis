@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"jarvis/pkg/domain"
 )
 
 const (
@@ -16,16 +18,6 @@ const (
 	jiraIssuePath   = "/rest/api/3/issue"
 	jiraMyIssuesJQL = "assignee=currentuser()"
 )
-
-// JiraIssue represents a Jira issue.
-type JiraIssue struct {
-	Key      string `json:"key"`
-	Summary  string `json:"summary"`
-	Status   string `json:"status"`
-	Assignee string `json:"assignee"`
-	URL      string `json:"url"`
-	Type     string `json:"type"`
-}
 
 // JiraClient is the Jira API client.
 type JiraClient struct {
@@ -46,7 +38,7 @@ func NewJiraClient(baseURL, email, apiToken string) *JiraClient {
 }
 
 // GetMyIssues returns issues assigned to the current user.
-func (c *JiraClient) GetMyIssues() ([]JiraIssue, error) {
+func (c *JiraClient) GetMyIssues() ([]domain.JiraIssue, error) {
 	resp, err := c.doRequest(http.MethodGet, jiraSearchPath+"?jql="+jiraMyIssuesJQL, nil)
 	if err != nil {
 		return nil, err
@@ -75,9 +67,9 @@ func (c *JiraClient) GetMyIssues() ([]JiraIssue, error) {
 		return nil, fmt.Errorf("jira: parse search response: %w", err)
 	}
 
-	issues := make([]JiraIssue, len(result.Issues))
+	issues := make([]domain.JiraIssue, len(result.Issues))
 	for i, raw := range result.Issues {
-		issues[i] = JiraIssue{
+		issues[i] = domain.JiraIssue{
 			Key:      raw.Key,
 			Summary:  raw.Fields.Summary,
 			Status:   raw.Fields.Status.Name,
@@ -91,10 +83,10 @@ func (c *JiraClient) GetMyIssues() ([]JiraIssue, error) {
 }
 
 // GetIssue returns a single issue by key.
-func (c *JiraClient) GetIssue(issueKey string) (JiraIssue, error) {
+func (c *JiraClient) GetIssue(issueKey string) (domain.JiraIssue, error) {
 	resp, err := c.doRequest(http.MethodGet, jiraIssuePath+"/"+issueKey, nil)
 	if err != nil {
-		return JiraIssue{}, err
+		return domain.JiraIssue{}, err
 	}
 
 	var raw struct {
@@ -114,10 +106,10 @@ func (c *JiraClient) GetIssue(issueKey string) (JiraIssue, error) {
 	}
 
 	if err := json.Unmarshal(resp, &raw); err != nil {
-		return JiraIssue{}, fmt.Errorf("jira: parse issue: %w", err)
+		return domain.JiraIssue{}, fmt.Errorf("jira: parse issue: %w", err)
 	}
 
-	return JiraIssue{
+	return domain.JiraIssue{
 		Key:      raw.Key,
 		Summary:  raw.Fields.Summary,
 		Status:   raw.Fields.Status.Name,
@@ -128,7 +120,7 @@ func (c *JiraClient) GetIssue(issueKey string) (JiraIssue, error) {
 }
 
 // CreateIssue creates a new Jira issue.
-func (c *JiraClient) CreateIssue(projectKey, summary, description, issueType string) (JiraIssue, error) {
+func (c *JiraClient) CreateIssue(projectKey, summary, description, issueType string) (domain.JiraIssue, error) {
 	body := map[string]any{
 		"fields": map[string]any{
 			"project":   map[string]string{"key": projectKey},

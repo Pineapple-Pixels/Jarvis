@@ -31,14 +31,14 @@ Preserva:
 Se breve pero no pierdas informacion clave.`
 
 type ConversationUseCase struct {
-	store            service.MemoryService
+	store            service.ConversationStore
 	ai               domain.AIProvider
 	hooks            *hooks.Registry
 	maxHistory       int
 	compactThreshold int
 }
 
-func NewConversationUseCase(store service.MemoryService, ai domain.AIProvider, hooksRegistry *hooks.Registry, maxHistory, compactThreshold int) *ConversationUseCase {
+func NewConversationUseCase(store service.ConversationStore, ai domain.AIProvider, hooksRegistry *hooks.Registry, maxHistory, compactThreshold int) *ConversationUseCase {
 	if maxHistory <= 0 {
 		maxHistory = domain.MaxHistoryMessages
 	}
