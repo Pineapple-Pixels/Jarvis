@@ -1,12 +1,18 @@
 {
   "arcane_version": "1.0.0",
-  "profile_command": "backend-go",
+  "profile_command": "backend-go+database+testing+docs+ai+self-improving+finance",
   "profiles": [
     "core",
-    "backend-go"
+    "backend-go",
+    "database",
+    "testing",
+    "docs",
+    "ai",
+    "self-improving",
+    "finance"
   ],
-  "installed_at": "2026-04-21T21:35:10Z",
-  "total_skills": 44,
+  "installed_at": "2026-05-17T16:38:03Z",
+  "total_skills": 89,
   "total_rules": 6,
   "source": "C:\\Users\\Educabot\\Desktop\\Personal\\Claude-Code-Arcane"
 }
